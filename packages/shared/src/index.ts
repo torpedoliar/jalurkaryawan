@@ -9,3 +9,4 @@ export * from "./schemas/trips";
 export * from "./schemas/bookings";
 export * from "./schemas/reports";
 export * from "./time";
+export * from "./settings";
