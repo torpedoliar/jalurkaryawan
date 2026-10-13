@@ -168,7 +168,8 @@ Satu trip = satu bus. Satu kombinasi rute + shift + arah + tanggal boleh punya b
 - Denormalisasi untuk pengecekan bentrok: `date`, `shift_id`, `direction`
 - `source` (`SUBSCRIPTION`/`DAILY`)
 - `status` (`BOOKED`/`CANCELLED`/`NO_SHOW`)
-- `cancelled_at`, `cancel_reason`, `reminder_sent_at`, `created_at`
+- `cancelled_at`, `reminder_sent_at`, `created_at`
+- `cancel_reason` (nullable): `USER` (dibatalkan karyawan), `ADMIN_TRIP` (trip dibatalkan admin), `SUSPENDED` (user dibekukan), `SUBSCRIPTION_ENDED`, `USER_DEACTIVATED`
 - Partial unique index `(user_id, date, shift_id, direction) WHERE status = 'BOOKED'`. Ini menegakkan aturan bentrok dan otomatis mencegah booking dobel di trip yang sama.
 
 **`rejected_requests`**: sumber laporan kekurangan kursi.
@@ -186,8 +187,8 @@ Satu trip = satu bus. Satu kombinasi rute + shift + arah + tanggal boleh punya b
 
 Dijalankan dalam satu transaksi database untuk setiap booking (harian maupun langganan):
 
-1. Validasi: user aktif, `booking_suspended_until` kosong atau sudah lewat, dan waktu sekarang masih sebelum `departure_at − cutoff` (cutoff dicek terhadap trip paling awal yang tersedia).
-2. Ambil daftar trip `SCHEDULED` untuk rute + shift + arah + tanggal, urut berdasarkan `departure_at`, lalu `id`.
+1. Validasi: user aktif, `booking_suspended_until` kosong atau sudah lewat, dan `stop_id` milik rute tersebut serta aktif.
+2. Ambil daftar trip `SCHEDULED` untuk rute + shift + arah + tanggal yang **belum lewat cutoff** (`now < departure_at − cutoff`), urut berdasarkan `departure_at`, lalu `id`. Jika trip ada tetapi semuanya sudah lewat cutoff, kembalikan `CUTOFF_PASSED` tanpa mencatat `rejected_requests`. (Generate langganan oleh cron melewati filter cutoff ini.)
 3. Untuk setiap trip, jalankan:
    ```sql
    UPDATE trips SET booked_count = booked_count + 1
@@ -206,7 +207,9 @@ Dijalankan oleh cron malam dan saat API start, untuk setiap tanggal dari hari in
 1. Untuk setiap `trip_templates` aktif yang `weekdays`-nya mencakup tanggal itu, insert trip dengan `ON CONFLICT (template_id, date) DO NOTHING`. Kapasitas diambil dari bus template. Job ini idempoten dan otomatis mengejar tanggal yang terlewat jika server sempat mati.
 2. Untuk setiap langganan `ACTIVE` yang mencakup tanggal itu (rentang tanggal + `weekdays`), urut berdasarkan `subscriptions.created_at`:
    - Lewati jika user dibekukan pada tanggal itu.
-   - Lewati jika booking dari langganan ini untuk tanggal itu sudah pernah dibuat, termasuk yang sudah dibatalkan. Pembatalan per hari tidak dibatalkan ulang oleh cron.
+   - Lewati jika user sudah punya booking `BOOKED` di tanggal + shift + arah itu (dari langganan ini maupun booking harian).
+   - Lewati jika booking dari langganan ini untuk tanggal itu pernah dibatalkan dengan `cancel_reason` `USER` (karyawan membatalkan hari itu) atau `ADMIN_TRIP` (trip dibatalkan admin). Booking yang batal karena `SUSPENDED` **dibuat ulang** setelah pembekuan dicabut.
+   - Lewati jika sudah ada `rejected_requests` untuk langganan ini di tanggal itu, supaya penolakan dan notifikasinya tidak berulang setiap malam. Karyawan yang ditolak tetap bisa mencoba booking harian.
    - Jalankan alokasi kursi (5.1) tanpa pengecekan cutoff. Jika penuh, catat `rejected_requests` (source `SUBSCRIPTION`) dan kirim notifikasi "Langganan tanggal X tidak kebagian kursi".
 
 Karena trip dan booking langganan untuk satu tanggal dibuat dalam transaksi yang sama, pelanggan langganan selalu mendapat kursi lebih dulu sebelum trip bisa dipesan lewat booking harian.
@@ -228,6 +231,8 @@ Karena trip dan booking langganan untuk satu tanggal dibuat dalam transaksi yang
 - Hanya sebelum `departure_at − cutoff`.
 - Status jadi `CANCELLED` dan `booked_count` dikurangi 1 dalam satu transaksi, sehingga kursi langsung tersedia untuk booking harian.
 - Membatalkan booking dari langganan hanya berlaku untuk hari itu; langganan tetap `ACTIVE`.
+- Mengganti titik jemput atau rute = batalkan lalu booking ulang. Tidak ada endpoint "ubah booking" terpisah. Untuk langganan: akhiri, lalu buat langganan baru.
+- Perubahan detail langganan (rute, titik, hari) tidak didukung; akhiri dan buat baru.
 
 ### 5.6 Aksi admin
 
@@ -239,7 +244,11 @@ Karena trip dan booking langganan untuk satu tanggal dibuat dalam transaksi yang
 | Nonaktifkan template | Tidak membuat trip baru. Trip yang sudah ada dibatalkan lewat aksi "batalkan trip" secara eksplisit. |
 | Batalkan trip / semua trip di satu tanggal (libur) | Status `CANCELLED`, semua booking di dalamnya dibatalkan (`cancel_reason` = pembatalan oleh admin), penumpang mendapat notifikasi. Tidak ada pemindahan otomatis. |
 | Bekukan user | Set `booking_suspended_until` dan `suspend_reason`. Semua booking user itu yang belum lewat cutoff dibatalkan. Booking harian baru ditolak (`USER_SUSPENDED`), dan cron tidak membuatkan booking dari langganannya selama dibekukan. Langganan tidak berubah dan otomatis jalan lagi setelah masa pembekuan selesai. User mendapat notifikasi. |
-| Cabut pembekuan | `booking_suspended_until` = null. Booking langganan dibuat kembali pada run cron berikutnya, atau langsung jika admin memicu generate. User mendapat notifikasi. |
+| Cabut pembekuan | `booking_suspended_until` = null. Booking langganan untuk tanggal yang sudah di-generate langsung dibuat ulang (dengan cek cutoff). User mendapat notifikasi. |
+| Ubah kapasitas bus | Diterapkan ke trip `SCHEDULED` bus itu yang belum berangkat. Ditolak dengan `CAPACITY_BELOW_BOOKED` jika ada trip yang tidak muat, dan error menyebutkan trip mana. |
+| Nonaktifkan bus / rute | Ditolak jika masih dipakai template aktif atau trip `SCHEDULED` yang belum berangkat. Admin harus memindahkan atau membatalkannya dulu. |
+| Nonaktifkan titik jemput | Ditolak jika masih dipakai langganan `ACTIVE` atau booking `BOOKED` ke depan. Titik jemput tidak pernah dihapus permanen supaya riwayat tetap utuh. |
+| Nonaktifkan karyawan | `active` = false, semua booking ke depan dibatalkan (`USER_DEACTIVATED`, tanpa cek cutoff), langganan di-`ENDED`, semua refresh token dicabut. |
 
 Pembekuan **hanya dilakukan admin secara manual**. Sistem tidak membekukan user secara otomatis. Semua aksi admin dicatat di `audit_logs`.
 
@@ -259,6 +268,7 @@ Pembekuan **hanya dilakukan admin secara manual**. Sistem tidak membekukan user 
 - Access token JWT berlaku 15 menit. Refresh token berlaku 30 hari, disimpan dalam bentuk hash, dirotasi setiap dipakai, dan dicabut saat logout atau reset password.
 - Web menyimpan refresh token di cookie httpOnly + Secure + SameSite=Strict. Mobile menyimpannya di `expo-secure-store`.
 - Wajib HTTPS (Nginx). CORS hanya untuk origin web.
+- Reset password oleh admin menghasilkan password sementara acak (ditampilkan sekali ke admin), `must_change_password` = true, dan semua refresh token user dicabut. Tidak ada fitur "lupa password" mandiri di sub-project A; karyawan menghubungi admin.
 - User dengan `auth_provider = SSO` tidak bisa login dengan password. Integrasi SSO tidak dibangun di sub-project A.
 
 ### 5.9 Import karyawan
@@ -282,6 +292,15 @@ Format `{ "code": string, "message": string }`, pesan dalam bahasa Indonesia dan
 | `VALIDATION_ERROR` | Input tidak valid |
 | `UNAUTHORIZED` / `FORBIDDEN` | Belum login / tidak punya akses |
 | `ACCOUNT_LOCKED` | Akun terkunci karena terlalu banyak gagal login |
+
+### 5.11 Operasional & data
+
+- **Zona waktu:** server dan container memakai `TZ=Asia/Jakarta`; semua konversi jam lokal ke `departure_at` dilakukan di satu helper waktu yang di-unit-test.
+- **Backup:** `pg_dump` harian lewat cron di host, disimpan 14 hari, ditambah salinan di luar server (lokasi ditentukan tim IT). Prosedur restore diuji minimal sekali sebelum go-live.
+- **Logging:** log aplikasi JSON ke stdout (dikumpulkan Docker, rotasi via `json-file` max-size). Endpoint `GET /api/health` untuk cek API + koneksi DB.
+- **Retensi:** data booking, trip, dan audit log disimpan tanpa penghapusan otomatis di sub-project A (≈300 trip/hari, ≈5.000 booking/hari, aman untuk PostgreSQL bertahun-tahun). Notifikasi yang sudah dibaca dan lebih dari 90 hari dihapus oleh cron malam.
+- **Migrasi DB:** `prisma migrate deploy` dijalankan saat container API start.
+- **Konfigurasi rahasia** (JWT secret, kredensial DB, service account FCM) lewat file `.env` di server, tidak masuk git.
 
 ## 6. Layar per Role
 
@@ -323,6 +342,9 @@ Format `{ "code": string, "message": string }`, pesan dalam bahasa Indonesia dan
 - Generate trip idempoten (dijalankan dua kali hasilnya sama); prioritas langganan berdasarkan `created_at`; pembatalan per hari tidak dibuat ulang oleh cron.
 - Ganti bus / ubah template ditolak jika kapasitas < booking.
 - Pembekuan membatalkan booking ke depan dan cron melewati langganannya; setelah dicabut, booking dibuat lagi.
+- Cron tidak membuat ulang booking langganan yang dibatalkan karyawan, dan tidak mengirim notifikasi "tidak kebagian kursi" dua kali untuk tanggal yang sama.
+- Booking harian ke kombinasi yang semua tripnya lewat cutoff mengembalikan `CUTOFF_PASSED`, bukan `TRIP_FULL`.
+- Nonaktifkan karyawan membatalkan booking ke depan dan mengakhiri langganannya.
 - Login lockout; guard role (vendor tidak bisa menulis, karyawan tidak bisa mengakses data karyawan lain).
 
 **Unit test:** perhitungan waktu (shift malam melewati tengah malam, `day_offset`, cutoff, jam jemput per titik) dan parser import Excel/CSV.
@@ -343,3 +365,6 @@ Format `{ "code": string, "message": string }`, pesan dalam bahasa Indonesia dan
 - Notifikasi WhatsApp/SMS
 - Multi-lokasi/multi-site
 - Pembekuan otomatis oleh sistem
+- Lupa password mandiri (reset lewat admin)
+- Ubah booking/langganan di tempat (cukup batal lalu buat baru)
+- Distribusi aplikasi mobile ke Play Store/App Store (cara distribusi: APK internal atau store, diputuskan saat implementasi mobile)
