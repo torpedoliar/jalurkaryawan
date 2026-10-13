@@ -80,6 +80,8 @@ Satu modul NestJS per domain, tanpa layer repository/service tambahan.
 | `reports` | Keterisian, permintaan ditolak, riwayat booking (dipakai dashboard admin & vendor) |
 | `notifications` | Notifikasi di aplikasi, kirim FCM, cron pengingat |
 | `audit` | Log setiap perubahan oleh admin |
+| `settings` | Baca/simpan pengaturan terpusat (5.12), cache di memori, enkripsi nilai rahasia, setup awal Super Admin |
+| `backup` | Job backup, salin ke network share, daftar & unduh file, tes koneksi share |
 
 ### 3.4 Role & hak akses
 
@@ -98,8 +100,12 @@ Menggunakan `@nestjs/schedule` di dalam proses API, tanpa Redis atau queue.
 
 | Job | Jadwal | Tugas |
 |---|---|---|
-| Generate trip | Tiap malam + saat API start | Buat trip dan booking langganan sampai H+`generate_days_ahead` |
+| Generate trip | Tiap malam pada `generate_run_time` + saat API start | Buat trip dan booking langganan sampai H+`generate_days_ahead` |
 | Pengingat | Tiap 5 menit | Kirim pengingat untuk booking yang berangkat dalam `reminder_minutes` |
+| Backup | Tiap hari pada `backup_run_time` | `pg_dump`, hapus file lebih tua dari `backup_retention_days`, salin ke network share |
+| Bersih notifikasi | Tiap malam | Hapus notifikasi terbaca lebih tua dari `notification_retention_days` |
+
+Jadwal job dibaca dari `settings`. Jika diubah lewat UI, job didaftarkan ulang lewat `SchedulerRegistry` tanpa restart.
 
 > ponytail: satu proses API dan satu PostgreSQL. Tambah Redis/queue atau API multi-instance hanya jika cron mulai berat atau beban melebihi satu server. Kalau API dijalankan lebih dari satu instance, cron harus dipindah ke satu instance saja atau diberi advisory lock.
 
@@ -134,10 +140,7 @@ Akun vendor dan admin login memakai kolom `nik` sebagai username.
 - Untuk trip `PICKUP`, jam jemput di titik = `departure_at + offset_minutes`.
 - Untuk trip `DROPOFF`, urutan titik dibalik dan perkiraan jam tiba = `departure_at + (offset_terakhir − offset_minutes)`.
 
-**`settings`**: `key`, `value`. Nilai awal:
-- `booking_cutoff_minutes` = 120
-- `reminder_minutes` = 60
-- `generate_days_ahead` = 7
+**`settings`**: `key`, `value` (JSON), `is_secret`, `updated_by`, `updated_at`. Daftar lengkap kunci, tipe, default, dan validasinya ada di 5.12. Nilai rahasia disimpan terenkripsi.
 
 ### 4.2 Jadwal & trip
 
@@ -264,10 +267,11 @@ Pembekuan **hanya dilakukan admin secara manual**. Sistem tidak membekukan user 
 
 - Password di-hash dengan argon2 atau bcrypt.
 - Import karyawan menghasilkan password awal acak, `must_change_password` = true. Admin mengunduh daftar password awal sekali saat import. Endpoint selain ganti password ditolak sampai password diganti.
-- Lockout: 5 kali gagal login membuat akun terkunci 15 menit. Rate limit per IP di endpoint login.
-- Access token JWT berlaku 15 menit. Refresh token berlaku 30 hari, disimpan dalam bentuk hash, dirotasi setiap dipakai, dan dicabut saat logout atau reset password.
+- Lockout: `login_max_failed` kali gagal login (default 5) membuat akun terkunci `login_lockout_minutes` (default 15). Rate limit per IP di endpoint login sebesar `login_rate_limit_per_minute` (default 10).
+- Access token JWT berlaku `access_token_minutes` (default 15). Refresh token berlaku `refresh_token_days` (default 30), disimpan dalam bentuk hash, dirotasi setiap dipakai, dan dicabut saat logout atau reset password.
+- Password minimal `password_min_length` karakter (default 8).
 - Web menyimpan refresh token di cookie httpOnly + Secure + SameSite=Strict. Mobile menyimpannya di `expo-secure-store`.
-- Wajib HTTPS (Nginx). CORS hanya untuk origin web.
+- Wajib HTTPS (Nginx). Web dan API disajikan dari origin yang sama (`/api` di-proxy Nginx), sehingga CORS tidak dibuka.
 - Reset password oleh admin menghasilkan password sementara acak (ditampilkan sekali ke admin), `must_change_password` = true, dan semua refresh token user dicabut. Tidak ada fitur "lupa password" mandiri di sub-project A; karyawan menghubungi admin.
 - User dengan `auth_provider = SSO` tidak bisa login dengan password. Integrasi SSO tidak dibangun di sub-project A.
 
@@ -296,11 +300,65 @@ Format `{ "code": string, "message": string }`, pesan dalam bahasa Indonesia dan
 ### 5.11 Operasional & data
 
 - **Zona waktu:** server dan container memakai `TZ=Asia/Jakarta`; semua konversi jam lokal ke `departure_at` dilakukan di satu helper waktu yang di-unit-test.
-- **Backup:** `pg_dump` harian lewat cron di host ke folder lokal server (`/backups`), disimpan 14 hari. Setelah dump, file disalin ke **network share** (path diatur lewat `.env`, misalnya mount SMB/CIFS). Jika salin ke network share gagal, dicatat di log dan tampil sebagai peringatan di dashboard Super Admin. Super Admin juga bisa **mengunduh** file backup dari layar Pengaturan (daftar file backup lokal + tombol download; folder `/backups` di-mount read-only ke container API). Prosedur restore diuji minimal sekali sebelum go-live.
+- **Backup:** dijalankan oleh container API sendiri (image API berisi `pg_dump` dan `smbclient`), sehingga seluruh pengaturannya ada di UI (5.12):
+  - **Lokal server:** `pg_dump` ke volume `/backups`, disimpan `backup_retention_days` hari (default 14).
+  - **Network share:** jika `backup_share_enabled`, file disalin ke share SMB (`backup_share_path`, `backup_share_username`, `backup_share_password`). Gagal salin dicatat di log dan tampil sebagai peringatan di dashboard Super Admin.
+  - **Download:** Super Admin melihat daftar file backup dan mengunduhnya dari layar Pengaturan.
+  - Tombol **"Backup sekarang"** dan **"Tes koneksi share"** di UI.
+  - Restore tetap prosedur manual di server (lihat bagian 9); diuji minimal sekali sebelum go-live.
 - **Logging:** log aplikasi JSON ke stdout (dikumpulkan Docker, rotasi via `json-file` max-size). Endpoint `GET /api/health` untuk cek API + koneksi DB.
-- **Retensi:** data booking, trip, dan audit log disimpan tanpa penghapusan otomatis di sub-project A (≈300 trip/hari, ≈5.000 booking/hari, aman untuk PostgreSQL bertahun-tahun). Notifikasi yang sudah dibaca dan lebih dari 90 hari dihapus oleh cron malam.
+- **Retensi:** data booking, trip, dan audit log disimpan tanpa penghapusan otomatis di sub-project A (≈300 trip/hari, ≈5.000 booking/hari, aman untuk PostgreSQL bertahun-tahun). Notifikasi yang sudah dibaca dan lebih tua dari `notification_retention_days` (default 90) dihapus oleh cron malam.
 - **Migrasi DB:** `prisma migrate deploy` dijalankan saat container API start.
-- **Konfigurasi rahasia** (JWT secret, kredensial DB, service account FCM) lewat file `.env` di server, tidak masuk git.
+
+### 5.12 Pengaturan Terpusat (semua lewat frontend)
+
+Prinsip: **semua pengaturan dan perubahan operasional dilakukan lewat layar web**, tanpa mengedit file konfigurasi satu per satu atau restart server. Data master (karyawan, vendor, bus, rute, titik jemput, shift, template, akun admin/vendor) sejak awal sudah dikelola lewat UI; bagian ini memusatkan sisanya.
+
+**Yang tetap di `.env` (bootstrap, tidak bisa disimpan di database):**
+
+| Variabel | Alasan |
+|---|---|
+| `DATABASE_URL` | API butuh ini untuk bisa membaca tabel `settings` |
+| `APP_SECRET` | Menandatangani JWT dan menjadi kunci enkripsi nilai rahasia di `settings` |
+| `APP_DOMAIN` | Nama domain untuk sertifikat HTTPS Nginx |
+
+File `.env` dibuat **sekali** oleh skrip instalasi (`infra/install.sh`) yang menghasilkan `APP_SECRET` dan password DB secara acak, lalu tidak perlu diedit lagi. Mengganti `APP_SECRET` membuat semua sesi login dan nilai rahasia tersimpan tidak valid, jadi hanya dilakukan saat instal ulang.
+
+**Setup awal lewat UI:** jika belum ada user `SUPER_ADMIN`, web menampilkan layar **Setup awal** untuk membuat akun Super Admin pertama. Endpoint setup otomatis terkunci permanen setelah Super Admin pertama dibuat.
+
+**Daftar pengaturan (layar Pengaturan, khusus `SUPER_ADMIN`):**
+
+| Grup | Kunci | Default | Validasi |
+|---|---|---|---|
+| Booking | `booking_cutoff_minutes` | 120 | 0–1440 |
+| | `generate_days_ahead` | 7 | 1–31 |
+| | `generate_run_time` | 00:30 | jam HH:mm |
+| Notifikasi | `reminder_minutes` | 60 | 5–720 |
+| | `push_enabled` | false | boolean |
+| | `fcm_service_account` | kosong | file JSON service account Firebase (rahasia), divalidasi strukturnya saat upload |
+| | `notification_retention_days` | 90 | 7–3650 |
+| Keamanan | `login_max_failed` | 5 | 3–20 |
+| | `login_lockout_minutes` | 15 | 1–1440 |
+| | `login_rate_limit_per_minute` | 10 | 1–100 |
+| | `access_token_minutes` | 15 | 5–120 |
+| | `refresh_token_days` | 30 | 1–180 |
+| | `password_min_length` | 8 | 6–64 |
+| Backup | `backup_run_time` | 02:00 | jam HH:mm |
+| | `backup_retention_days` | 14 | 1–365 |
+| | `backup_share_enabled` | false | boolean |
+| | `backup_share_path` | kosong | format `//host/share/folder` |
+| | `backup_share_username` | kosong | teks |
+| | `backup_share_password` | kosong | rahasia |
+
+**Aturan perilaku:**
+- Skema pengaturan didefinisikan sekali dengan Zod di `packages/shared` (tipe, default, batas). Server menolak nilai di luar batas dengan `VALIDATION_ERROR`; form web memakai skema yang sama.
+- Kunci yang belum pernah disimpan memakai nilai default dari skema, jadi sistem langsung jalan setelah instalasi.
+- Perubahan **berlaku tanpa restart**: API menyimpan cache pengaturan di memori yang di-refresh setiap kali pengaturan disimpan; jadwal job didaftarkan ulang.
+- Nilai rahasia dienkripsi AES-256-GCM dengan kunci turunan `APP_SECRET`. API **tidak pernah mengembalikan nilai rahasia** ke frontend; UI hanya menampilkan status "tersimpan / belum diatur" dan tombol ganti.
+- Setiap perubahan pengaturan dicatat di `audit_logs` (nilai lama dan baru; nilai rahasia ditulis `***`).
+- Tombol aksi: **Tes kirim push** (ke perangkat Super Admin sendiri), **Tes koneksi share**, **Backup sekarang**.
+- Perubahan aturan booking hanya berlaku untuk tindakan berikutnya; booking yang sudah ada tidak diubah.
+- Mengubah durasi token hanya berlaku untuk token yang diterbitkan setelahnya.
 
 ## 6. Layar per Role
 
@@ -316,7 +374,9 @@ Format `{ "code": string, "message": string }`, pesan dalam bahasa Indonesia dan
 | Trip harian | Filter tanggal/rute/shift; ganti bus; batalkan trip atau satu tanggal; daftar penumpang per trip + export Excel |
 | Laporan | Keterisian per rute/shift/tanggal, permintaan ditolak, riwayat booking per karyawan; semua bisa diekspor ke Excel |
 | Audit log | Filter berdasarkan admin, aksi, tanggal |
-| Pengaturan & Admin user | Khusus `SUPER_ADMIN`: cutoff, pengingat, jumlah hari generate, CRUD akun admin, daftar & unduh file backup, status salinan ke network share |
+| Pengaturan | Khusus `SUPER_ADMIN`, satu layar bertab sesuai grup di 5.12 (Booking, Notifikasi, Keamanan, Backup). Tab Backup: daftar & unduh file, status salinan network share, tombol Backup sekarang dan Tes koneksi share. Tab Notifikasi: upload service account FCM dan Tes kirim push. |
+| Admin user | Khusus `SUPER_ADMIN`: CRUD akun admin |
+| Setup awal | Hanya muncul jika belum ada Super Admin: buat akun Super Admin pertama |
 
 ### 6.2 Karyawan (web responsif + Expo, fitur sama)
 
@@ -327,6 +387,7 @@ Format `{ "code": string, "message": string }`, pesan dalam bahasa Indonesia dan
 - Riwayat booking dan notifikasi
 - Banner jika booking sedang dibekukan (sampai tanggal berapa dan alasannya)
 - Mobile mendaftarkan token FCM setelah login dan menghapusnya saat logout
+- Alamat server untuk aplikasi mobile ditanam saat build (`EXPO_PUBLIC_API_URL` = domain perusahaan); tidak ada pengaturan yang perlu diisi karyawan
 
 ### 6.3 Vendor (web, hanya baca)
 
@@ -357,6 +418,8 @@ Risiko: aturan bisnis di mock bisa menyimpang dari backend asli. Mitigasinya, mo
 - Cron tidak membuat ulang booking langganan yang dibatalkan karyawan, dan tidak mengirim notifikasi "tidak kebagian kursi" dua kali untuk tanggal yang sama.
 - Booking harian ke kombinasi yang semua tripnya lewat cutoff mengembalikan `CUTOFF_PASSED`, bukan `TRIP_FULL`.
 - Nonaktifkan karyawan membatalkan booking ke depan dan mengakhiri langganannya.
+- Pengaturan: nilai di luar batas ditolak; perubahan `booking_cutoff_minutes` dan `login_max_failed` langsung berlaku tanpa restart; nilai rahasia tidak pernah muncul di response API; perubahan tercatat di audit log dengan rahasia disamarkan.
+- Setup awal hanya bisa dipakai sekali; setelah Super Admin ada, endpoint setup ditolak.
 - Login lockout; guard role (vendor tidak bisa menulis, karyawan tidak bisa mengakses data karyawan lain).
 
 **Unit test:** perhitungan waktu (shift malam melewati tengah malam, `day_offset`, cutoff, jam jemput per titik) dan parser import Excel/CSV.
@@ -380,3 +443,5 @@ Risiko: aturan bisnis di mock bisa menyimpang dari backend asli. Mitigasinya, mo
 - Lupa password mandiri (reset lewat admin)
 - Ubah booking/langganan di tempat (cukup batal lalu buat baru)
 - Distribusi aplikasi mobile ke Play Store/App Store (cara distribusi: APK internal atau store, diputuskan saat implementasi mobile)
+- Restore database lewat UI (restore tetap prosedur manual di server dengan `pg_restore`, terdokumentasi di README; restore lewat web terlalu berisiko karena menimpa seluruh data saat aplikasi sedang berjalan)
+- Mengganti domain, sertifikat HTTPS, atau kredensial database lewat UI (bagian dari instalasi server)
