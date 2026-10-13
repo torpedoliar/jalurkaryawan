@@ -296,7 +296,7 @@ Format `{ "code": string, "message": string }`, pesan dalam bahasa Indonesia dan
 ### 5.11 Operasional & data
 
 - **Zona waktu:** server dan container memakai `TZ=Asia/Jakarta`; semua konversi jam lokal ke `departure_at` dilakukan di satu helper waktu yang di-unit-test.
-- **Backup:** `pg_dump` harian lewat cron di host, disimpan 14 hari, ditambah salinan di luar server (lokasi ditentukan tim IT). Prosedur restore diuji minimal sekali sebelum go-live.
+- **Backup:** `pg_dump` harian lewat cron di host ke folder lokal server (`/backups`), disimpan 14 hari. Setelah dump, file disalin ke **network share** (path diatur lewat `.env`, misalnya mount SMB/CIFS). Jika salin ke network share gagal, dicatat di log dan tampil sebagai peringatan di dashboard Super Admin. Super Admin juga bisa **mengunduh** file backup dari layar Pengaturan (daftar file backup lokal + tombol download; folder `/backups` di-mount read-only ke container API). Prosedur restore diuji minimal sekali sebelum go-live.
 - **Logging:** log aplikasi JSON ke stdout (dikumpulkan Docker, rotasi via `json-file` max-size). Endpoint `GET /api/health` untuk cek API + koneksi DB.
 - **Retensi:** data booking, trip, dan audit log disimpan tanpa penghapusan otomatis di sub-project A (≈300 trip/hari, ≈5.000 booking/hari, aman untuk PostgreSQL bertahun-tahun). Notifikasi yang sudah dibaca dan lebih dari 90 hari dihapus oleh cron malam.
 - **Migrasi DB:** `prisma migrate deploy` dijalankan saat container API start.
@@ -316,7 +316,7 @@ Format `{ "code": string, "message": string }`, pesan dalam bahasa Indonesia dan
 | Trip harian | Filter tanggal/rute/shift; ganti bus; batalkan trip atau satu tanggal; daftar penumpang per trip + export Excel |
 | Laporan | Keterisian per rute/shift/tanggal, permintaan ditolak, riwayat booking per karyawan; semua bisa diekspor ke Excel |
 | Audit log | Filter berdasarkan admin, aksi, tanggal |
-| Pengaturan & Admin user | Khusus `SUPER_ADMIN`: cutoff, pengingat, jumlah hari generate, CRUD akun admin |
+| Pengaturan & Admin user | Khusus `SUPER_ADMIN`: cutoff, pengingat, jumlah hari generate, CRUD akun admin, daftar & unduh file backup, status salinan ke network share |
 
 ### 6.2 Karyawan (web responsif + Expo, fitur sama)
 
@@ -333,7 +333,19 @@ Format `{ "code": string, "message": string }`, pesan dalam bahasa Indonesia dan
 - Satu dashboard: keterisian per rute/shift/tanggal (kuota, terisi, persentase), rute yang sering penuh, permintaan ditolak. Bisa diekspor ke Excel.
 - Semua vendor melihat seluruh data.
 
-## 7. Testing
+## 7. Urutan Implementasi: Frontend Dulu
+
+Seluruh frontend (web admin/karyawan/vendor + aplikasi mobile karyawan) dibangun lebih dulu, baru backend.
+
+1. **Kontrak API di `packages/shared`.** Sebelum UI, tulis skema Zod untuk setiap request/response, enum, kode error (5.10), dan daftar endpoint. Ini satu-satunya sumber kebenaran untuk frontend dan backend.
+2. **Mock API dengan MSW** (`msw` di browser untuk web, `msw/native` untuk Expo). Handler mock tinggal di `packages/mock-api`, memakai data in-memory hasil seed dan meniru aturan bisnis penting (kuota penuh, cutoff, bentrok, dibekukan, role) supaya semua state UI (sukses, error, kosong, loading) bisa dicoba.
+3. **Frontend web lalu mobile**, dipanggil lewat satu API client tipis yang memvalidasi response dengan skema Zod. Mock aktif lewat env `VITE_USE_MOCK=true` / `EXPO_PUBLIC_USE_MOCK=true`.
+4. **Backend NestJS** mengimplementasikan kontrak yang sama. Integration test backend memastikan response lolos skema Zod dari `shared`.
+5. **Integrasi:** matikan mock, arahkan frontend ke API asli, jalankan smoke test Playwright.
+
+Risiko: aturan bisnis di mock bisa menyimpang dari backend asli. Mitigasinya, mock hanya meniru perilaku yang tercantum di spec ini, dan backend adalah sumber kebenaran; selisih ditemukan saat langkah 5 dan diperbaiki di backend atau kontrak.
+
+## 8. Testing
 
 **Integration test API terhadap PostgreSQL asli** (container Docker, tanpa mock DB), dengan fokus pada logika berisiko:
 - Rebutan kursi: 100 booking bersamaan ke total kapasitas 50 harus menghasilkan tepat 50 sukses, 50 `TRIP_FULL`, 50 baris `rejected_requests`, dan `booked_count` = 50.
@@ -353,7 +365,7 @@ Format `{ "code": string, "message": string }`, pesan dalam bahasa Indonesia dan
 
 **Seed script:** data contoh realistis (50 bus, beberapa vendor, 3 shift, ~20 rute, 2.500 karyawan dummy) untuk demo dan uji beban sederhana.
 
-## 8. Di Luar Lingkup Sub-project A
+## 9. Di Luar Lingkup Sub-project A
 
 - Absensi naik bus dan deteksi no-show otomatis (sub-project B)
 - Live tracking GPS dan aplikasi supir (sub-project C)
