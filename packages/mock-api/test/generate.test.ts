@@ -78,6 +78,23 @@ describe("createSubscription", () => {
     expect(db.bookings[0]).toMatchObject({ status: "CANCELLED", cancelReason: "SUBSCRIPTION_ENDED" });
   });
 
+  test("suspended mid-window: suspended dates skipped, later covered dates still booked", () => {
+    const db = world();
+    for (const d of ["2026-10-15", "2026-10-16", "2026-10-17"]) generateTrips(db, d);
+    db.users[0]!.bookingSuspendedUntil = "2026-10-15";
+    const r = createSubscription(db, "u1", sub({ startDate: "2026-10-15" }));
+    expect(r.booked).toEqual(["2026-10-16", "2026-10-17"]);
+    expect(db.bookings.filter((b) => b.date === "2026-10-15")).toHaveLength(0);
+  });
+
+  test("ending twice keeps the first endDate", () => {
+    const db = world();
+    const { subscription } = createSubscription(db, "u1", sub());
+    endSubscription(db, "u1", subscription.id);
+    db.now = () => new Date("2026-10-16T00:00:00+07:00");
+    expect(endSubscription(db, "u1", subscription.id).endDate).toBe(D);
+  });
+
   test("a daily booking blocks the subscription date silently", () => {
     const db = world();
     generateTrips(db, "2026-10-15");

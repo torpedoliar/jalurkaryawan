@@ -61,8 +61,7 @@ export function createSubscription(db: Db, userId: string, input: SubscriptionIn
       if (!(e instanceof DomainError)) throw e;
       if (e.code === "CUTOFF_PASSED") res.skippedCutoff.push(date);
       else if (e.code === "TRIP_FULL") res.rejected.push(date);
-      else if (e.code === "USER_SUSPENDED") break;
-      // SCHEDULE_CONFLICT (daily booking exists) and NOT_FOUND: skip silently
+      // USER_SUSPENDED (per date), SCHEDULE_CONFLICT (daily booking exists) and NOT_FOUND: skip silently
     }
   }
   return res;
@@ -72,6 +71,7 @@ export function createSubscription(db: Db, userId: string, input: SubscriptionIn
 export function endSubscription(db: Db, userId: string, subscriptionId: string): Subscription {
   const s = db.subscriptions.find((x) => x.id === subscriptionId && x.userId === userId);
   if (!s) throw new DomainError("NOT_FOUND");
+  if (s.status === "ENDED") return s;
   s.status = "ENDED";
   s.endDate = today(db);
   for (const b of db.bookings.filter((x) => x.subscriptionId === s.id && x.status === "BOOKED")) {
