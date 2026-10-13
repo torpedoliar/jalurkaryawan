@@ -113,7 +113,7 @@ describe("booking", () => {
     expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
     expect(results.find((r) => r.status === 409)!.body.code).toBe("TRIP_FULL");
     expect(trip.bookedCount).toBe(trip.capacity);
-    expect(getDb().rejected.some((x) => x.date === DAY && x.routeId === "r2")).toBe(true);
+    expect(getDb().rejected.filter((x) => x.date === DAY && x.routeId === "r2" && x.shiftId === "pagi" && x.direction === "PICKUP")).toHaveLength(1);
   });
 });
 
