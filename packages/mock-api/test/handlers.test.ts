@@ -213,4 +213,11 @@ describe("import", () => {
     expect(r.body.updated.map((x: Json) => x.nik)).toEqual(["K1001"]);
     expect(r.body.errors.map((e: Json) => e.row)).toEqual([3, 4, 5]);
   });
+
+  test("a row with a missing cell is reported in Indonesian, naming the column", async () => {
+    const { token } = await login("ga");
+    const r = await api(ENDPOINTS.importPreview, { token, body: { rows: [{ name: "Tanpa NIK" }] } });
+    expect(r.status).toBe(200);
+    expect(r.body.errors).toEqual([{ row: 2, message: "nik: format tidak sesuai." }]);
+  });
 });
