@@ -7,12 +7,18 @@ import { getDb } from "./state";
 export const fail = (code: ErrorCode, message = ERROR_MESSAGES[code]): Response =>
   HttpResponse.json({ code, message }, { status: ERROR_HTTP_STATUS[code] });
 
+/** Zod's own copy is English; the app surface is Indonesian. */
+export const zodMessage = (e: ZodError): string | undefined => {
+  const i = e.issues[0];
+  if (!i) return undefined;
+  if (i.code === "unrecognized_keys") return "Ada kolom yang tidak dikenali.";
+  if (i.code === "invalid_type") return `${i.path.join(".") || "body"}: format tidak sesuai.`;
+  return `${i.path.join(".") || "body"}: ${i.message}`;
+};
+
 export function toErrorResponse(e: unknown): Response {
   if (e instanceof DomainError) return fail(e.code, e.message);
-  if (e instanceof ZodError) {
-    const i = e.issues[0];
-    return fail("VALIDATION_ERROR", i ? `${i.path.join(".") || "body"}: ${i.message}` : undefined);
-  }
+  if (e instanceof ZodError) return fail("VALIDATION_ERROR", zodMessage(e));
   throw e;
 }
 

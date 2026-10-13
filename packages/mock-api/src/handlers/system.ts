@@ -36,7 +36,7 @@ export const systemHandlers = [
     const after: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(input) as [keyof Settings, unknown][]) {
       if (v === undefined || ctx.db.settings[k] === v) continue;
-      before[k] = mask(k, ctx.db.settings[k]);
+      before[k] = ctx.db.settings[k] === "" ? "" : mask(k, ctx.db.settings[k]);
       after[k] = mask(k, v);
     }
     ctx.db.settings = { ...ctx.db.settings, ...input };

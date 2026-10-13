@@ -30,7 +30,7 @@ export const authHandlers = [
     await parseBody(request, DeviceToken);
   })),
   http.delete(p(ENDPOINTS.deviceTokens), handle(async ({ db, request }) => {
-    requireUser(db, request, { allowMustChange: true });
+    requireUser(db, request);
     await parseBody(request, DeviceToken.pick({ token: true }));
   })),
 ];

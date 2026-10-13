@@ -3,7 +3,7 @@ import { http } from "msw";
 import { requireUser, resetPassword, tempPassword } from "../auth";
 import { DomainError, audit, nextId, type Db, type UserRow } from "../db";
 import { deactivateUser, suspendUser, unsuspendUser } from "../domain/admin";
-import { handle, parseBody, type Ctx } from "../http";
+import { handle, parseBody, zodMessage, type Ctx } from "../http";
 import { find, p, paginate, q, toBooking, toSummary } from "./util";
 
 const isAdminRole = (r: Role) => ADMIN_ROLES.includes(r);
@@ -35,7 +35,7 @@ function preview(db: Db, rows: unknown[]): ImportPreview & { valid: ImportRow[] 
       ? Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, typeof v === "number" ? String(v) : v]))
       : raw;
     const parsed = ImportRow.safeParse(cells);
-    if (!parsed.success) return void out.errors.push({ row, message: parsed.error.issues[0]!.message });
+    if (!parsed.success) return void out.errors.push({ row, message: zodMessage(parsed.error) ?? "Baris tidak valid." });
     const r = parsed.data;
     if (seen.has(r.nik)) return void out.errors.push({ row, message: `NIK ${r.nik} ganda di file` });
     seen.add(r.nik);

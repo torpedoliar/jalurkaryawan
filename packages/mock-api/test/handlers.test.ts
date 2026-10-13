@@ -64,6 +64,13 @@ describe("auth", () => {
     expect(s.status).toBe(200);
     expect(s.body.maintenance).toBe(true);
   });
+
+  test("device-token DELETE is also blocked until the password is changed", async () => {
+    const { token } = await login("K1090");
+    const r = await api(ENDPOINTS.deviceTokens, { token, method: "DELETE", body: { token: "tok" } });
+    expect(r.status).toBe(403);
+    expect(r.body.code).toBe("FORBIDDEN");
+  });
 });
 
 describe("roles", () => {
@@ -168,6 +175,25 @@ describe("settings and backups", () => {
     const good = new FormData();
     good.append("file", new File(["PGDMP-data"], "real.dump"));
     expect((await api(ENDPOINTS.backupUpload, { token, form: good })).status).toBe(200);
+  });
+
+  test("an unknown settings key is rejected in Indonesian", async () => {
+    const { token } = await login("admin");
+    const r = await api(ENDPOINTS.settings, { token, method: "PUT", body: { not_a_setting: 1 } });
+    expect(r.status).toBe(400);
+    expect(r.body.code).toBe("VALIDATION_ERROR");
+    expect(r.body.message).toBe("Ada kolom yang tidak dikenali.");
+    expect(r.body.message).not.toContain("Unrecognized");
+  });
+
+  test("the first write of a secret records an empty before, not ***", async () => {
+    const { token } = await login("admin");
+    expect(getDb().settings.backup_share_password).toBe("");
+    await api(ENDPOINTS.settings, { token, method: "PUT", body: { backup_share_password: "hunter2" } });
+    const audit = await api(`${ENDPOINTS.audit}?action=SETTINGS_UPDATE`, { token });
+    expect(JSON.stringify(audit.body)).not.toContain("hunter2");
+    expect(audit.body.items[0].before).toEqual({ backup_share_password: "" });
+    expect(audit.body.items[0].after).toEqual({ backup_share_password: "***" });
   });
 });
 
