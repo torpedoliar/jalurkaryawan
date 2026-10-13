@@ -65,6 +65,27 @@ describe("auth", () => {
     expect(s.body.maintenance).toBe(true);
   });
 
+  test("web refresh works from the httpOnly cookie alone; mobile from the body", async () => {
+    const res = await fetch(`http://localhost${ENDPOINTS.login}`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ nik: "K1001", password: DEMO_PASSWORD }),
+    });
+    expect(res.headers.get("set-cookie")).toMatch(/^bms_refresh=rt\.\d+; .*HttpOnly; Secure; SameSite=Strict/);
+    const cookie = res.headers.get("set-cookie")!.split(";")[0]!;
+    const { refreshToken } = await res.json();
+    const web = await fetch(`http://localhost${ENDPOINTS.refresh}`, { method: "POST", headers: { cookie } });
+    expect(web.status).toBe(200);
+    const stale = await api(ENDPOINTS.refresh, { body: { refreshToken } });
+    expect(stale.status).toBe(401); // rotated by the cookie refresh
+    const fresh = (await web.json()).refreshToken;
+    expect((await api(ENDPOINTS.refresh, { body: { refreshToken: fresh } })).status).toBe(200);
+  });
+
+  test("/me hides a suspension that has already ended", async () => {
+    getDb().users.find((u) => u.nik === "K1001")!.bookingSuspendedUntil = "2026-10-13";
+    const { token } = await login("K1001");
+    expect((await api(ENDPOINTS.me, { token })).body).toMatchObject({ bookingSuspendedUntil: null, suspendReason: null });
+  });
+
   test("device-token DELETE is also blocked until the password is changed", async () => {
     const { token } = await login("K1090");
     const r = await api(ENDPOINTS.deviceTokens, { token, method: "DELETE", body: { token: "tok" } });
@@ -124,6 +145,21 @@ describe("booking", () => {
   });
 });
 
+describe("manifest", () => {
+  test("passengers are listed in stop-visit order: DROPOFF runs the stops in reverse", async () => {
+    const { token } = await login("admin");
+    const db = getDb();
+    for (const direction of ["PICKUP", "DROPOFF"] as const) {
+      const trip = db.trips.find((t) => t.date === DAY && t.direction === direction && t.bookedCount > 2)!;
+      const stops = db.stops.filter((x) => x.routeId === trip.routeId && x.active);
+      db.bookings.filter((b) => b.tripId === trip.id).forEach((b, i) => (b.stopId = stops[i % stops.length]!.id)); // seed puts all on one stop
+      const seqs = (await api(ENDPOINTS.tripPassengers(trip.id), { token })).body.map((x: Json) => x.stopSeq);
+      const sorted = [...seqs].sort((a, b) => (direction === "PICKUP" ? a - b : b - a));
+      expect(seqs).toEqual(sorted);
+    }
+  });
+});
+
 describe("settings and backups", () => {
   test("secrets are never echoed and are masked in the audit log", async () => {
     const { token } = await login("admin");
@@ -175,6 +211,20 @@ describe("settings and backups", () => {
     const good = new FormData();
     good.append("file", new File(["PGDMP-data"], "real.dump"));
     expect((await api(ENDPOINTS.backupUpload, { token, form: good })).status).toBe(200);
+  });
+
+  test("an uploaded backup never raises the share-copy warning; a failed job run does", async () => {
+    const { token } = await login("admin");
+    const db = getDb();
+    db.settings.backup_share_enabled = true;
+    db.settings.backup_share_path = "\\nas\bms";
+    await api(ENDPOINTS.backupRun, { token, method: "POST" });
+    const good = new FormData();
+    good.append("file", new File(["PGDMP-data"], "zz-upload.dump"));
+    await api(ENDPOINTS.backupUpload, { token, form: good });
+    expect((await api(ENDPOINTS.dashboard, { token })).body.backupWarning).toBeNull();
+    db.backups.find((b) => b.name.startsWith("bms-"))!.copiedToShare = false;
+    expect((await api(ENDPOINTS.dashboard, { token })).body.backupWarning).toMatch(/gagal disalin/);
   });
 
   test("an unknown settings key is rejected in Indonesian", async () => {

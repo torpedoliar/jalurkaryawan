@@ -80,7 +80,7 @@ export const tripHandlers = [
     return ctx.db.bookings
       .filter((b) => b.tripId === trip.id && b.status !== "CANCELLED")
       .map((b) => toPassenger(ctx.db, b))
-      .sort((a, b) => a.stopSeq - b.stopSeq || a.name.localeCompare(b.name));
+      .sort((a, b) => a.pickupAt.localeCompare(b.pickupAt) || a.name.localeCompare(b.name)); // DROPOFF visits stops in reverse (spec 4.1)
   })),
 
   /** Spec 6.2/6.3 departure board: every role, no passenger names. */

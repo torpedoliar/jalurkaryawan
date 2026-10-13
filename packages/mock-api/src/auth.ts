@@ -2,14 +2,18 @@ import {
   toJakartaIso,
   type ChangePasswordRequest, type LoginRequest, type LoginResponse, type Me, type Role, type SetupRequest, type TempPassword,
 } from "@bms/shared";
-import { DomainError, audit, nextId, type Db, type UserRow } from "./db";
+import { DomainError, audit, nextId, today, type Db, type UserRow } from "./db";
 
 const BAD_LOGIN = "NIK atau password salah.";
 
-export const toMe = (u: UserRow): Me => ({
-  id: u.id, nik: u.nik, name: u.name, role: u.role, vendorId: u.vendorId, mustChangePassword: u.mustChangePassword,
-  bookingSuspendedUntil: u.bookingSuspendedUntil, suspendReason: u.suspendReason,
-});
+/** An expired suspension reads as none, so the banner (spec 6.2) needs no date math. */
+export function toMe(db: Db, u: UserRow): Me {
+  const suspended = u.bookingSuspendedUntil !== null && u.bookingSuspendedUntil >= today(db);
+  return {
+    id: u.id, nik: u.nik, name: u.name, role: u.role, vendorId: u.vendorId, mustChangePassword: u.mustChangePassword,
+    bookingSuspendedUntil: suspended ? u.bookingSuspendedUntil : null, suspendReason: suspended ? u.suspendReason : null,
+  };
+}
 
 export const bearer = (request: Request): string | null =>
   request.headers.get("authorization")?.replace(/^Bearer /, "") ?? null;
@@ -24,7 +28,7 @@ function issue(db: Db, u: UserRow): LoginResponse {
   const refreshToken = nextId(db, "rt.");
   db.sessions.set(accessToken, u.id);
   db.sessions.set(refreshToken, u.id);
-  return { accessToken, refreshToken, user: toMe(u) };
+  return { accessToken, refreshToken, user: toMe(db, u) };
 }
 
 /** Spec 5.8: lockout after login_max_failed failures; SSO users cannot use a password. */

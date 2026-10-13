@@ -32,17 +32,17 @@ export async function parseBody<T extends ZodTypeAny>(request: Request, schema: 
   return schema.parse(raw);
 }
 
-export interface Ctx { db: Db; request: Request; params: Record<string, string>; url: URL }
+export interface Ctx { db: Db; request: Request; params: Record<string, string>; url: URL; cookies: Record<string, string> }
 
 /** MSW resolver wrapper: maintenance gate (spec 5.11), error mapping, JSON / 204 response. */
 export function handle(fn: (ctx: Ctx) => unknown, opts: { duringMaintenance?: boolean } = {}): HttpResponseResolver {
   // Cast via unknown: MSW 2.6 types resolvers as returning StrictResponse<Body> (branded), which a plain Response is not
   // comparable to; we return plain Response for JSON, 204 and errors alike, and MSW accepts any Response at runtime.
-  return (async ({ request, params }: { request: Request; params: Record<string, unknown> }): Promise<Response> => {
+  return (async ({ request, params, cookies }: { request: Request; params: Record<string, unknown>; cookies: Record<string, string> }): Promise<Response> => {
     const db = getDb();
     if (db.maintenance && !opts.duringMaintenance) return fail("MAINTENANCE");
     try {
-      const out = await fn({ db, request, params: params as Record<string, string>, url: new URL(request.url) });
+      const out = await fn({ db, request, params: params as Record<string, string>, url: new URL(request.url), cookies });
       if (out instanceof Response) return out;
       return out === undefined ? new HttpResponse(null, { status: 204 }) : HttpResponse.json(out as JsonBodyType);
     } catch (e) {

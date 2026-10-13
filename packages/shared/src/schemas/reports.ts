@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Direction } from "../enums";
+import { Direction, NotificationType } from "../enums";
 import { HexColor, Id, IsoDate, IsoDateTime } from "./common";
 
 export const OccupancyRow = z.object({
@@ -21,7 +21,7 @@ export const NoShowCandidate = z.object({ userId: Id, nik: z.string(), name: z.s
 export type NoShowCandidate = z.infer<typeof NoShowCandidate>;
 
 export const Notification = z.object({
-  id: Id, type: z.string(), title: z.string(), body: z.string(),
+  id: Id, type: NotificationType, title: z.string(), body: z.string(),
   data: z.record(z.unknown()), readAt: IsoDateTime.nullable(), createdAt: IsoDateTime,
 });
 export type Notification = z.infer<typeof Notification>;

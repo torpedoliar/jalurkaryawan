@@ -12,7 +12,9 @@ export const Me = z.object({
 });
 export type Me = z.infer<typeof Me>;
 
-/** Web gets refresh token as httpOnly cookie; mobile gets it in the body (`refreshToken`). */
+/** Spec 5.8 refresh token cookie (httpOnly, Path=/api/auth). Web ignores `refreshToken` in the body and lets the browser send the cookie. */
+export const REFRESH_COOKIE = "bms_refresh";
+/** Web gets refresh token as httpOnly cookie; mobile reads `refreshToken` from the body and sends it back in the refresh/logout body. */
 export const LoginResponse = z.object({ accessToken: z.string(), refreshToken: z.string().optional(), user: Me });
 export type LoginResponse = z.infer<typeof LoginResponse>;
 export const RefreshResponse = LoginResponse;

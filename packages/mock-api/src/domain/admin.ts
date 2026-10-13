@@ -17,6 +17,7 @@ const passengersOf = (db: Db, tripId: string) => db.bookings.filter((b) => b.tri
 
 export function suspendUser(db: Db, actorId: string, userId: string, until: string, reason: string): void {
   const u = user(db, userId);
+  if (until < today(db)) throw new DomainError("VALIDATION_ERROR", "Tanggal akhir pembekuan sudah lewat.");
   const before = { bookingSuspendedUntil: u.bookingSuspendedUntil, suspendReason: u.suspendReason };
   u.bookingSuspendedUntil = until;
   u.suspendReason = reason;
@@ -44,6 +45,7 @@ export function unsuspendUser(db: Db, actorId: string, userId: string): void {
         allocateSeat(db, { ...s, userId, date, source: "SUBSCRIPTION", subscriptionId: s.id });
       } catch (e) {
         if (!(e instanceof DomainError)) throw e;
+        if (e.code === "TRIP_FULL") notify(db, userId, "SUBSCRIPTION_REJECTED", "Langganan tidak kebagian kursi", `Langganan tanggal ${date} tidak kebagian kursi. Coba booking harian.`, { date });
       }
     }
   }
@@ -65,8 +67,10 @@ export function deactivateUser(db: Db, actorId: string, userId: string): void {
 
 export function changeTripBus(db: Db, actorId: string, tripId: string, busId: string): void {
   const trip = db.trips.find((t) => t.id === tripId);
-  const bus = db.buses.find((b) => b.id === busId && b.active);
+  const bus = db.buses.find((b) => b.id === busId);
   if (!trip || !bus) throw new DomainError("NOT_FOUND");
+  if (!bus.active) throw new DomainError("VALIDATION_ERROR", "Bus tidak aktif.");
+  if (trip.status !== "SCHEDULED" || !notDeparted(db, trip.departureAt)) throw new DomainError("VALIDATION_ERROR", "Trip sudah dibatalkan atau sudah berangkat.");
   if (bus.capacity < trip.bookedCount) throw new DomainError("CAPACITY_BELOW_BOOKED", `Bus ${bus.plate} hanya ${bus.capacity} kursi, sudah ${trip.bookedCount} booking.`);
   const before = { busId: trip.busId, capacity: trip.capacity };
   trip.busId = bus.id;
@@ -91,6 +95,7 @@ export function cancelTrip(db: Db, actorId: string, tripId: string): void {
   const trip = db.trips.find((t) => t.id === tripId);
   if (!trip) throw new DomainError("NOT_FOUND");
   if (trip.status === "CANCELLED") return;
+  if (!notDeparted(db, trip.departureAt)) throw new DomainError("VALIDATION_ERROR", "Trip sudah berangkat.");
   for (const b of passengersOf(db, tripId)) {
     cancelBooking(db, b, "ADMIN_TRIP", { checkCutoff: false });
     notify(db, b.userId, "TRIP_CANCELLED", "Trip dibatalkan", `Trip ${trip.date} jam ${trip.departureAt.slice(11, 16)} dibatalkan admin.`, { tripId });
@@ -100,7 +105,7 @@ export function cancelTrip(db: Db, actorId: string, tripId: string): void {
 }
 
 export function cancelDate(db: Db, actorId: string, date: string): number {
-  const trips = db.trips.filter((t) => t.date === date && t.status === "SCHEDULED");
+  const trips = db.trips.filter((t) => t.date === date && t.status === "SCHEDULED" && notDeparted(db, t.departureAt));
   for (const t of trips) cancelTrip(db, actorId, t.id);
   return trips.length;
 }

@@ -1,5 +1,5 @@
 import { departureAt, isPastCutoff, isoWeekday, type BookingSource, type CancelReason, type Direction, type Trip } from "@bms/shared";
-import { DomainError, nextId, nowIso, type BookingRow, type Db, type UserRow } from "../db";
+import { DomainError, nextId, nowIso, today, type BookingRow, type Db, type UserRow } from "../db";
 
 export function isSuspendedOn(user: UserRow, date: string): boolean {
   return user.bookingSuspendedUntil !== null && date <= user.bookingSuspendedUntil;
@@ -32,7 +32,8 @@ export interface AllocateInput {
 export function allocateSeat(db: Db, i: AllocateInput): BookingRow {
   const user = db.users.find((u) => u.id === i.userId);
   if (!user || !user.active) throw new DomainError("FORBIDDEN");
-  if (!i.fromCron && isSuspendedOn(user, i.date)) throw new DomainError("USER_SUSPENDED");
+  // Spec 5.6: no new daily booking while suspended (any date). Subscription dates are per date, so they resume after `until` (spec 5.2).
+  if (!i.fromCron && isSuspendedOn(user, i.source === "DAILY" ? today(db) : i.date)) throw new DomainError("USER_SUSPENDED");
   const stop = db.stops.find((s) => s.id === i.stopId);
   if (!stop || stop.routeId !== i.routeId || !stop.active) throw new DomainError("VALIDATION_ERROR", "Titik jemput tidak valid untuk rute ini.");
   if (db.bookings.some((b) => b.userId === i.userId && b.date === i.date && b.shiftId === i.shiftId && b.direction === i.direction && b.status === "BOOKED")) {

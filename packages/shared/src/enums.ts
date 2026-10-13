@@ -14,6 +14,11 @@ export const SubscriptionStatus = z.enum(["ACTIVE", "ENDED"]);
 export type SubscriptionStatus = z.infer<typeof SubscriptionStatus>;
 export const CancelReason = z.enum(["USER", "ADMIN_TRIP", "SUSPENDED", "SUBSCRIPTION_ENDED", "USER_DEACTIVATED"]);
 export type CancelReason = z.infer<typeof CancelReason>;
+/** Spec 5.7 notification kinds. */
+export const NotificationType = z.enum([
+  "TRIP_CANCELLED", "BUS_CHANGED", "SCHEDULE_CHANGED", "BOOKING_CANCELLED", "SUBSCRIPTION_REJECTED", "SUSPENDED", "UNSUSPENDED", "REMINDER",
+]);
+export type NotificationType = z.infer<typeof NotificationType>;
 export const AuthProvider = z.enum(["LOCAL", "SSO"]);
 export type AuthProvider = z.infer<typeof AuthProvider>;
 /** Departure board status. ALMOST = booked >= 90% of capacity. UI labels: TERSEDIA/HAMPIR/PENUH/BATAL. */

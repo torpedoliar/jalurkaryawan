@@ -1,7 +1,7 @@
 import {
   ERROR_MESSAGES, Settings, jakartaDate, toJakartaIso,
   type AuditLog, type BackupFile, type BookingSource, type BookingStatus, type Bus, type CancelReason,
-  type Direction, type ErrorCode, type Notification, type RejectedRequest, type Route, type Shift, type Stop,
+  type Direction, type ErrorCode, type Notification, type NotificationType, type RejectedRequest, type Route, type Shift, type Stop,
   type Subscription, type Trip, type TripTemplate, type UserSummary, type Vendor,
 } from "@bms/shared";
 
@@ -45,7 +45,7 @@ export class DomainError extends Error {
   }
 }
 
-export function notify(db: Db, userId: string, type: string, title: string, body: string, data: Record<string, unknown> = {}) {
+export function notify(db: Db, userId: string, type: NotificationType, title: string, body: string, data: Record<string, unknown> = {}) {
   db.notifications.push({ id: nextId(db, "n"), userId, type, title, body, data, readAt: null, createdAt: nowIso(db) });
 }
 

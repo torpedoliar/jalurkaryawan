@@ -14,9 +14,10 @@ function range(ctx: Ctx) {
   return { from, to };
 }
 
-/** Spec 5.11: share copy failure shows on the Super Admin dashboard. */
+/** Spec 5.11: the backup job's share copy failure shows on the Super Admin dashboard. Uploads and pre-restore snapshots are not job runs. */
 function backupWarning(db: Db): string | null {
-  const last = [...db.backups].filter((b) => !b.name.startsWith("pre-restore-")).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+  // ponytail: job runs recognized by the `bms-` name prefix; the backend keeps a source column.
+  const last = [...db.backups].filter((b) => b.name.startsWith("bms-")).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
   if (!last) return "Belum ada backup.";
   if (db.settings.backup_share_enabled && !last.copiedToShare) return `Backup ${last.name} gagal disalin ke network share.`;
   return null;
