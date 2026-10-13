@@ -1,0 +1,240 @@
+<title>Jalur Karyawan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=JetBrains+Mono:wght@400;600;700&family=Inter+Tight:wght@400;500;600&display=swap">
+<style>
+/* Layout: transit wayfinding — route line colors, departure board for admin, boarding-pass tickets for employees */
+:root{
+  --bg:#EEF1F4; --surface:#FFFFFF; --sunk:#E3E8EE; --ink:#10161D; --muted:#5A6573; --line:#CDD5DE;
+  --signal:#F5B700; --signal-ink:#10161D;
+  --ok:#1E8A4C; --warn:#C77700; --full:#C8312B;
+  --r1:#D6322B; --r2:#1F6FD1; --r3:#169B62; --r4:#E07A00; --r5:#7A3FC2; --r6:#0E9AA7;
+  --display:"Archivo",system-ui,sans-serif; --body:"Inter Tight",system-ui,sans-serif; --mono:"JetBrains Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0B0F14; --surface:#141A22; --sunk:#1B232D; --ink:#E9EEF3; --muted:#8C98A6; --line:#26303B;
+  --signal:#FFC72C; --signal-ink:#0B0F14; --ok:#3CC274; --warn:#F0A030; --full:#F0574F; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0B0F14; --surface:#141A22; --sunk:#1B232D; --ink:#E9EEF3; --muted:#8C98A6; --line:#26303B;
+  --signal:#FFC72C; --signal-ink:#0B0F14; --ok:#3CC274; --warn:#F0A030; --full:#F0574F; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--body);padding-inline:16px;padding-block:24px 48px}
+.wrap{max-width:1180px;margin:0 auto;display:grid;gap:40px}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.eyebrow{font:600 11px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+button{font:inherit;cursor:pointer}
+:focus-visible{outline:3px solid var(--signal);outline-offset:2px}
+
+/* masthead */
+.mast{display:flex;flex-wrap:wrap;align-items:end;justify-content:space-between;gap:16px;border-bottom:3px solid var(--ink);padding-bottom:16px}
+.mast h1{font-size:clamp(34px,6vw,60px);font-stretch:118%;font-weight:900;letter-spacing:-.02em;line-height:.95}
+.mast h1 span{background:var(--signal);color:var(--signal-ink);padding:0 .12em}
+.mast p{margin:6px 0 0;color:var(--muted);max-width:56ch}
+.lines{display:flex;gap:6px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:6px;font:700 12px/1 var(--mono);padding:6px 9px 6px 6px;border-radius:999px;background:var(--surface);border:1px solid var(--line)}
+.dot{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;color:#fff;font:800 10px/1 var(--mono)}
+
+.cols{display:grid;grid-template-columns:380px 1fr;gap:32px;align-items:start}
+@media (max-width:960px){.cols{grid-template-columns:1fr}}
+.label{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px;gap:12px}
+.label h2{font-size:20px;font-stretch:110%}
+
+/* phone */
+.phone{background:var(--surface);border:1px solid var(--line);border-radius:28px;padding:20px 16px;display:grid;gap:16px;max-width:400px;width:100%}
+.hi{display:flex;justify-content:space-between;align-items:center}
+.hi h3{font-size:22px;font-stretch:112%}
+.shift{font:700 11px/1 var(--mono);padding:6px 8px;border-radius:6px;background:var(--sunk)}
+.days{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
+.day{flex:0 0 auto;border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:12px;padding:8px 10px;text-align:center;min-width:52px}
+.day b{display:block;font:700 18px/1.1 var(--mono)}
+.day small{font:600 10px/1 var(--mono);color:var(--muted);text-transform:uppercase}
+.day[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.day[aria-pressed="true"] small{color:inherit;opacity:.7}
+
+/* ticket */
+.ticket{--c:var(--r2);position:relative;background:var(--bg);border-radius:16px;overflow:hidden;border:1px solid var(--line)}
+.ticket .band{height:8px;background:var(--c)}
+.ticket .top{padding:14px 16px 12px;display:grid;gap:10px}
+.trow{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.dir{font:700 11px/1 var(--mono);letter-spacing:.1em;color:var(--c)}
+.stops{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px}
+.stops .from{font:800 20px/1.05 var(--display);font-stretch:108%}
+.stops .to{text-align:right;font:800 20px/1.05 var(--display);font-stretch:108%}
+.stops .bar{width:56px;height:3px;background:var(--c);position:relative}
+.stops .bar::before,.stops .bar::after{content:"";position:absolute;top:-4px;width:11px;height:11px;border-radius:50%;background:var(--bg);border:3px solid var(--c)}
+.stops .bar::before{left:-6px}.stops .bar::after{right:-6px;background:var(--c)}
+.perf{position:relative;border-top:2px dashed var(--line);margin:0 12px}
+.perf::before,.perf::after{content:"";position:absolute;top:-11px;width:20px;height:20px;border-radius:50%;background:var(--surface);border:1px solid var(--line)}
+.perf::before{left:-23px}.perf::after{right:-23px}
+.stub{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:12px 16px 14px}
+.stub div{display:grid;gap:3px}
+.stub span{font:600 10px/1 var(--mono);letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+.stub b{font:700 16px/1.1 var(--mono)}
+.tact{display:flex;justify-content:space-between;align-items:center;padding:0 16px 14px;gap:8px}
+.tag{font:700 11px/1 var(--mono);padding:5px 8px;border-radius:6px}
+.tag.sub{background:var(--sunk);color:var(--muted)}
+.btn-ghost{background:transparent;border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:7px 12px;font-size:13px}
+.cut{font:600 11px/1.3 var(--mono);color:var(--muted)}
+.cta{background:var(--signal);color:var(--signal-ink);border:0;border-radius:14px;padding:14px;font:800 15px/1 var(--display);font-stretch:110%;letter-spacing:.02em}
+.note{font-size:12px;color:var(--muted);text-align:center;margin:0}
+
+/* admin */
+.panel{display:grid;gap:16px;min-width:0}
+.bento{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+@media (max-width:700px){.bento{grid-template-columns:repeat(2,1fr)}}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;display:grid;gap:6px;min-width:0}
+.tile .n{font:700 34px/1 var(--mono);font-variant-numeric:tabular-nums}
+.tile .n small{font-size:14px;color:var(--muted)}
+.tile.hot{background:var(--signal);color:var(--signal-ink);border-color:transparent}
+.tile.hot .eyebrow,.tile.hot .n small{color:inherit;opacity:.75}
+.meter{height:6px;border-radius:3px;background:var(--sunk);overflow:hidden}
+.meter i{display:block;height:100%;background:var(--ink)}
+.tile.wide{grid-column:span 2}
+.spark{width:100%;height:44px;display:block}
+
+/* departure board */
+.board{background:#0D1218;color:#E8EDF2;border-radius:16px;overflow:hidden;border:1px solid var(--line)}
+.bhead{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid #222C37;gap:12px;flex-wrap:wrap}
+.bhead h3{font:800 15px/1 var(--display);font-stretch:118%;letter-spacing:.06em;text-transform:uppercase;color:#FFC72C}
+.clock{font:700 20px/1 var(--mono);color:#FFC72C}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:640px;font-family:var(--mono);font-variant-numeric:tabular-nums}
+th{font:600 10px/1 var(--mono);letter-spacing:.14em;color:#7F8B99;text-align:left;padding:10px 16px;text-transform:uppercase}
+td{padding:11px 16px;border-top:1px solid #1C252F;font-size:14px;white-space:nowrap}
+td.t{font-size:18px;font-weight:700;color:#FFFFFF}
+.rt{display:inline-flex;align-items:center;gap:8px;font-weight:700}
+.load{display:flex;align-items:center;gap:8px}
+.load .meter{width:80px;background:#222C37}
+.st{font:700 11px/1 var(--mono);padding:5px 8px;border-radius:4px;letter-spacing:.06em}
+.st.ok{background:#173A27;color:#5BE08F}.st.warn{background:#3D2C0C;color:#FFC24D}.st.full{background:#43171A;color:#FF7A73}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.foot{border-top:1px solid var(--line);padding-top:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;color:var(--muted);font-size:13px}
+.foot b{display:block;color:var(--ink);font-family:var(--display);font-stretch:110%;margin-bottom:4px}
+@media (prefers-reduced-motion:no-preference){.board tbody tr{animation:flip .5s both}.board tbody tr:nth-child(2){animation-delay:.06s}.board tbody tr:nth-child(3){animation-delay:.12s}.board tbody tr:nth-child(4){animation-delay:.18s}.board tbody tr:nth-child(5){animation-delay:.24s}.board tbody tr:nth-child(6){animation-delay:.3s}
+@keyframes flip{from{transform:rotateX(70deg);opacity:.3}to{transform:none;opacity:1}}}
+</style>
+
+<div class="wrap">
+  <header class="mast">
+    <div>
+      <div class="eyebrow">Mockup arah desain · A + B</div>
+      <h1>Jalur <span>Karyawan</span></h1>
+      <p>Setiap rute punya warna jalur seperti peta MRT. Admin melihat papan keberangkatan, karyawan memegang tiket. Data di halaman ini contoh.</p>
+    </div>
+    <div class="lines" aria-label="Warna jalur rute">
+      <span class="chip"><span class="dot" style="background:var(--r1)">R1</span>Cikarang</span>
+      <span class="chip"><span class="dot" style="background:var(--r2)">R2</span>Bekasi Timur</span>
+      <span class="chip"><span class="dot" style="background:var(--r3)">R3</span>Karawang</span>
+      <span class="chip"><span class="dot" style="background:var(--r4)">R4</span>Tambun</span>
+      <span class="chip"><span class="dot" style="background:var(--r5)">R5</span>Cibitung</span>
+      <span class="chip"><span class="dot" style="background:var(--r6)">R6</span>Jababeka</span>
+    </div>
+  </header>
+
+  <div class="cols">
+    <section>
+      <div class="label"><h2>Karyawan · HP</h2><span class="eyebrow">Gaya tiket</span></div>
+      <div class="phone">
+        <div class="hi">
+          <div><div class="eyebrow">Selamat pagi</div><h3>Rina Wulandari</h3></div>
+          <span class="shift">SHIFT PAGI</span>
+        </div>
+        <div class="days" role="group" aria-label="Pilih tanggal">
+          <button class="day" aria-pressed="true" id="d1"><small>Sel</small><b>14</b></button>
+          <button class="day" aria-pressed="false" id="d2"><small>Rab</small><b>15</b></button>
+          <button class="day" aria-pressed="false" id="d3"><small>Kam</small><b>16</b></button>
+          <button class="day" aria-pressed="false" id="d4"><small>Jum</small><b>17</b></button>
+          <button class="day" aria-pressed="false" id="d5"><small>Sab</small><b>18</b></button>
+        </div>
+
+        <article class="ticket" style="--c:var(--r2)">
+          <div class="band"></div>
+          <div class="top">
+            <div class="trow"><span class="dir">● JEMPUT · R2 BEKASI TIMUR</span><span class="tag sub">LANGGANAN</span></div>
+            <div class="stops"><div class="from">Halte Bulak Kapal</div><div class="bar"></div><div class="to">Pabrik Gate 2</div></div>
+          </div>
+          <div class="perf"></div>
+          <div class="stub">
+            <div><span>Jemput</span><b class="mono">05:42</b></div>
+            <div><span>Bus</span><b class="mono">B 7214 FX</b></div>
+            <div><span>Sisa kursi</span><b class="mono">3/50</b></div>
+          </div>
+          <div class="tact"><span class="cut">Batal maks. 03:40</span><button class="btn-ghost" id="c1">Batalkan</button></div>
+        </article>
+
+        <article class="ticket" style="--c:var(--r2)">
+          <div class="band"></div>
+          <div class="top">
+            <div class="trow"><span class="dir">● ANTAR · R2 BEKASI TIMUR</span><span class="tag sub">HARIAN</span></div>
+            <div class="stops"><div class="from">Pabrik Gate 2</div><div class="bar"></div><div class="to">Halte Bulak Kapal</div></div>
+          </div>
+          <div class="perf"></div>
+          <div class="stub">
+            <div><span>Berangkat</span><b class="mono">15:10</b></div>
+            <div><span>Bus</span><b class="mono">B 7031 KR</b></div>
+            <div><span>Tiba ±</span><b class="mono">16:02</b></div>
+          </div>
+          <div class="tact"><span class="cut">Batal maks. 13:10</span><button class="btn-ghost" id="c2">Batalkan</button></div>
+        </article>
+
+        <button class="cta" id="book">+ Booking kursi harian</button>
+        <p class="note">Ruang kosong di tiket nanti untuk QR absensi (sub-project B).</p>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="label"><h2>Admin · Dashboard</h2><span class="eyebrow">Bento + papan keberangkatan</span></div>
+      <div class="bento">
+        <div class="tile"><span class="eyebrow">Trip hari ini</span><span class="n">296</span><div class="meter"><i style="width:100%"></i></div></div>
+        <div class="tile"><span class="eyebrow">Keterisian</span><span class="n">87<small>%</small></span><div class="meter"><i style="width:87%"></i></div></div>
+        <div class="tile hot"><span class="eyebrow">Trip penuh</span><span class="n">18</span><span style="font-size:12px">R1 dan R4 shift pagi</span></div>
+        <div class="tile"><span class="eyebrow">Ditolak (penuh)</span><span class="n">64</span><span style="font-size:12px;color:var(--muted)">+22 dari kemarin</span></div>
+        <div class="tile wide">
+          <span class="eyebrow">Permintaan ditolak · 7 hari</span>
+          <svg class="spark" viewBox="0 0 300 44" preserveAspectRatio="none" aria-hidden="true">
+            <line x1="0" y1="43" x2="300" y2="43" stroke="var(--line)" stroke-width="1"/>
+            <path d="M0 34 L50 30 L100 32 L150 24 L200 26 L250 18 L300 8 L300 44 L0 44Z" fill="var(--signal)" opacity=".25"/>
+            <path d="M0 34 L50 30 L100 32 L150 24 L200 26 L250 18 L300 8" fill="none" stroke="var(--ink)" stroke-width="2"/>
+            <circle cx="296" cy="9" r="4" fill="var(--ink)"/>
+          </svg>
+        </div>
+        <div class="tile wide">
+          <span class="eyebrow">Rute terpadat · shift pagi</span>
+          <div class="load"><span class="dot" style="background:var(--r1)">R1</span><div class="meter" style="flex:1"><i style="width:100%;background:var(--full)"></i></div><span class="mono">150/150</span></div>
+          <div class="load"><span class="dot" style="background:var(--r4)">R4</span><div class="meter" style="flex:1"><i style="width:96%;background:var(--warn)"></i></div><span class="mono">96/100</span></div>
+        </div>
+      </div>
+
+      <div class="board">
+        <div class="bhead"><h3>Keberangkatan · Selasa 14 Okt</h3><span class="clock">05:12</span></div>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>Jam</th><th>Rute</th><th>Arah</th><th>Bus</th><th>Terisi</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td class="t">05:20</td><td><span class="rt"><span class="dot" style="background:var(--r1)">R1</span>Cikarang</span></td><td>Jemput</td><td>B 7101 FX</td><td><div class="load"><div class="meter"><i style="width:100%;background:#FF7A73"></i></div>50/50</div></td><td><span class="st full">PENUH</span></td></tr>
+              <tr><td class="t">05:25</td><td><span class="rt"><span class="dot" style="background:var(--r4)">R4</span>Tambun</span></td><td>Jemput</td><td>B 7330 KR</td><td><div class="load"><div class="meter"><i style="width:94%;background:#FFC24D"></i></div>47/50</div></td><td><span class="st warn">HAMPIR</span></td></tr>
+              <tr><td class="t">05:30</td><td><span class="rt"><span class="dot" style="background:var(--r2)">R2</span>Bekasi Timur</span></td><td>Jemput</td><td>B 7214 FX</td><td><div class="load"><div class="meter"><i style="width:94%;background:#FFC24D"></i></div>47/50</div></td><td><span class="st warn">HAMPIR</span></td></tr>
+              <tr><td class="t">05:35</td><td><span class="rt"><span class="dot" style="background:var(--r3)">R3</span>Karawang</span></td><td>Jemput</td><td>T 1882 AB</td><td><div class="load"><div class="meter"><i style="width:72%;background:#5BE08F"></i></div>36/50</div></td><td><span class="st ok">TERSEDIA</span></td></tr>
+              <tr><td class="t">05:40</td><td><span class="rt"><span class="dot" style="background:var(--r5)">R5</span>Cibitung</span></td><td>Jemput</td><td>B 7459 KR</td><td><div class="load"><div class="meter"><i style="width:60%;background:#5BE08F"></i></div>24/40</div></td><td><span class="st ok">TERSEDIA</span></td></tr>
+              <tr><td class="t">05:45</td><td><span class="rt"><span class="dot" style="background:var(--r6)">R6</span>Jababeka</span></td><td>Jemput</td><td>B 7020 FX</td><td><div class="load"><div class="meter"><i style="width:44%;background:#5BE08F"></i></div>22/50</div></td><td><span class="st ok">TERSEDIA</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="legend"><span>Papan selalu gelap di kedua tema, seperti signage stasiun.</span><span>Vendor melihat bento dan papan yang sama, tanpa tombol aksi.</span></div>
+    </section>
+  </div>
+
+  <footer class="foot">
+    <div><b>Warna jalur</b>Setiap rute punya warna tetap, dipakai di chip, tiket, papan, dan laporan.</div>
+    <div><b>Huruf</b>Archivo lebar untuk judul, JetBrains Mono untuk jam, plat, dan angka.</div>
+    <div><b>Mode malam</b>Tema gelap otomatis mengikuti perangkat; aplikasi bisa beralih ke gelap pada shift malam.</div>
+  </footer>
+</div>
+
+<script>
+document.querySelectorAll('.day').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.day').forEach(x=>x.setAttribute('aria-pressed','false'));
+  b.setAttribute('aria-pressed','true');
+}));
+</script>
