@@ -215,6 +215,15 @@ test("shared package loads", () => {
 Run: `pnpm install && pnpm test && pnpm typecheck`
 Expected: install OK, 1 test PASS, typecheck exit 0.
 
+`@bms/mock-api` has no test file yet, and `vitest run` exits 1 when it finds none, which would fail the root `pnpm test`. Add `packages/mock-api/vitest.config.ts`:
+```ts
+import { defineConfig } from "vitest/config";
+
+// ponytail: this package has no tests until Task 5; drop this file once test/ exists.
+export default defineConfig({ test: { passWithNoTests: true } });
+```
+Delete this file in Task 5, when `test/fixture.ts` lands.
+
 - [ ] **Step 5: Commit**
 
 ```bash
@@ -1429,6 +1438,8 @@ export function cancelBooking(db: Db, booking: BookingRow, reason: CancelReason,
 
 Run: `pnpm --filter @bms/mock-api test -- allocate && pnpm --filter @bms/mock-api typecheck`
 Expected: all PASS.
+
+The package now has real test files, so delete the placeholder `packages/mock-api/vitest.config.ts` added in Task 1 Step 4, then re-run `pnpm --filter @bms/mock-api test` to confirm the suite still passes without it.
 
 - [ ] **Step 7: Commit**
 
