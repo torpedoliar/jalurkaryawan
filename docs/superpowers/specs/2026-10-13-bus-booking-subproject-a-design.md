@@ -134,7 +134,7 @@ Akun vendor dan admin login memakai kolom `nik` sebagai username.
 
 **`shifts`**: `name`, `start_time`, `end_time` (jam lokal; `end_time < start_time` berarti melewati tengah malam)
 
-**`routes`**: `code` (unique), `name`, `active`
+**`routes`**: `code` (unique), `name`, `color` (hex, warna jalur untuk UI), `active`
 
 **`route_stops`**: `route_id`, `seq`, `name`, `offset_minutes`, `lat`/`lng` (nullable, untuk GPS nanti), `active`. Unique `(route_id, seq)`.
 - Untuk trip `PICKUP`, jam jemput di titik = `departure_at + offset_minutes`.
@@ -277,8 +277,8 @@ Pembekuan **hanya dilakukan admin secara manual**. Sistem tidak membekukan user 
 
 ### 5.9 Import karyawan
 
-- Upload Excel/CSV dengan kolom: NIK, nama, departemen, no. HP.
-- Server mem-parsing dan memvalidasi data, lalu menampilkan preview: baris baru, baris yang diperbarui (berdasarkan NIK), dan baris error beserta alasannya.
+- Upload Excel/CSV dengan kolom: NIK, nama, departemen, no. HP. File di-parsing di browser (SheetJS) menjadi baris JSON; export Excel juga dibuat di browser dari data JSON API.
+- Server memvalidasi baris, lalu menampilkan preview: baris baru, baris yang diperbarui (berdasarkan NIK), dan baris error beserta alasannya.
 - Admin mengonfirmasi, lalu data disimpan dalam satu transaksi.
 - Karyawan yang tidak ada di file **tidak** dinonaktifkan otomatis. Penonaktifan dilakukan manual.
 
@@ -390,6 +390,7 @@ File `.env` dibuat **sekali** oleh skrip instalasi (`infra/install.sh`) yang men
 ### 6.2 Karyawan (web responsif + Expo, fitur sama)
 
 - Login; ganti password wajib saat login pertama
+- **Papan keberangkatan**: semua trip hari ini (dan pilihan besok) dalam gaya papan stasiun: jam, warna/kode rute, arah, plat bus, terisi/kapasitas, status `TERSEDIA`/`HAMPIR` (≥90%)/`PENUH`/`BATAL`. Hanya baca, tanpa nama penumpang. Trip milik karyawan disorot. Data dari `GET /api/departures?date=` yang bisa diakses semua role.
 - Beranda: booking 7 hari ke depan (rute, titik jemput, jam jemput, plat bus) dengan tombol batal yang hilang setelah cutoff
 - Booking harian: pilih tanggal → shift → arah → rute → titik jemput, tampilkan sisa kursi
 - Langganan saya: buat, lihat, akhiri
