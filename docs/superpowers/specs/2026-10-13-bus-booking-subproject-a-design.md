@@ -81,7 +81,7 @@ Satu modul NestJS per domain, tanpa layer repository/service tambahan.
 | `notifications` | Notifikasi di aplikasi, kirim FCM, cron pengingat |
 | `audit` | Log setiap perubahan oleh admin |
 | `settings` | Baca/simpan pengaturan terpusat (5.12), cache di memori, enkripsi nilai rahasia, setup awal Super Admin |
-| `backup` | Job backup, salin ke network share, daftar & unduh file, tes koneksi share |
+| `backup` | Job backup, salin ke network share, daftar/unduh/upload file, tes koneksi share, restore + mode maintenance |
 
 ### 3.4 Role & hak akses
 
@@ -296,6 +296,7 @@ Format `{ "code": string, "message": string }`, pesan dalam bahasa Indonesia dan
 | `VALIDATION_ERROR` | Input tidak valid |
 | `UNAUTHORIZED` / `FORBIDDEN` | Belum login / tidak punya akses |
 | `ACCOUNT_LOCKED` | Akun terkunci karena terlalu banyak gagal login |
+| `MAINTENANCE` | Sistem sedang restore database (HTTP 503) |
 
 ### 5.11 Operasional & data
 
@@ -305,7 +306,15 @@ Format `{ "code": string, "message": string }`, pesan dalam bahasa Indonesia dan
   - **Network share:** jika `backup_share_enabled`, file disalin ke share SMB (`backup_share_path`, `backup_share_username`, `backup_share_password`). Gagal salin dicatat di log dan tampil sebagai peringatan di dashboard Super Admin.
   - **Download:** Super Admin melihat daftar file backup dan mengunduhnya dari layar Pengaturan.
   - Tombol **"Backup sekarang"** dan **"Tes koneksi share"** di UI.
-  - Restore tetap prosedur manual di server (lihat bagian 9); diuji minimal sekali sebelum go-live.
+  - **Restore lewat UI** (khusus `SUPER_ADMIN`): pilih file dari daftar backup atau upload file `.dump`. Pengaman:
+    1. Super Admin wajib memasukkan ulang password dan mengetik `RESTORE` untuk konfirmasi.
+    2. File divalidasi dulu (`pg_restore --list`); file rusak ditolak sebelum data disentuh.
+    3. Sistem otomatis membuat backup keadaan saat ini (`pre-restore-<timestamp>.dump`) sebelum restore, sehingga restore bisa dibatalkan dengan me-restore file tersebut.
+    4. Selama restore, API masuk **mode maintenance**: semua request selain status restore mendapat `503 MAINTENANCE`, dan job terjadwal dihentikan.
+    5. Restore dijalankan dengan `pg_restore --clean --if-exists --single-transaction`; jika gagal, database kembali ke kondisi sebelumnya.
+    6. Setelah selesai: `prisma migrate deploy` (untuk backup dari versi lama), cache pengaturan dimuat ulang, semua refresh token dicabut (semua user login ulang), job dijalankan kembali.
+    7. Hasil restore dicatat di log aplikasi dan `audit_logs` (setelah restore, entri ditambahkan ke database hasil restore).
+  - Prosedur restore diuji minimal sekali sebelum go-live.
 - **Logging:** log aplikasi JSON ke stdout (dikumpulkan Docker, rotasi via `json-file` max-size). Endpoint `GET /api/health` untuk cek API + koneksi DB.
 - **Retensi:** data booking, trip, dan audit log disimpan tanpa penghapusan otomatis di sub-project A (≈300 trip/hari, ≈5.000 booking/hari, aman untuk PostgreSQL bertahun-tahun). Notifikasi yang sudah dibaca dan lebih tua dari `notification_retention_days` (default 90) dihapus oleh cron malam.
 - **Migrasi DB:** `prisma migrate deploy` dijalankan saat container API start.
@@ -374,7 +383,7 @@ File `.env` dibuat **sekali** oleh skrip instalasi (`infra/install.sh`) yang men
 | Trip harian | Filter tanggal/rute/shift; ganti bus; batalkan trip atau satu tanggal; daftar penumpang per trip + export Excel |
 | Laporan | Keterisian per rute/shift/tanggal, permintaan ditolak, riwayat booking per karyawan; semua bisa diekspor ke Excel |
 | Audit log | Filter berdasarkan admin, aksi, tanggal |
-| Pengaturan | Khusus `SUPER_ADMIN`, satu layar bertab sesuai grup di 5.12 (Booking, Notifikasi, Keamanan, Backup). Tab Backup: daftar & unduh file, status salinan network share, tombol Backup sekarang dan Tes koneksi share. Tab Notifikasi: upload service account FCM dan Tes kirim push. |
+| Pengaturan | Khusus `SUPER_ADMIN`, satu layar bertab sesuai grup di 5.12 (Booking, Notifikasi, Keamanan, Backup). Tab Backup: daftar & unduh file, upload file backup, status salinan network share, tombol Backup sekarang, Tes koneksi share, dan Restore (dengan konfirmasi password + ketik `RESTORE`, lalu layar progres maintenance). Tab Notifikasi: upload service account FCM dan Tes kirim push. |
 | Admin user | Khusus `SUPER_ADMIN`: CRUD akun admin |
 | Setup awal | Hanya muncul jika belum ada Super Admin: buat akun Super Admin pertama |
 
@@ -420,6 +429,7 @@ Risiko: aturan bisnis di mock bisa menyimpang dari backend asli. Mitigasinya, mo
 - Nonaktifkan karyawan membatalkan booking ke depan dan mengakhiri langganannya.
 - Pengaturan: nilai di luar batas ditolak; perubahan `booking_cutoff_minutes` dan `login_max_failed` langsung berlaku tanpa restart; nilai rahasia tidak pernah muncul di response API; perubahan tercatat di audit log dengan rahasia disamarkan.
 - Setup awal hanya bisa dipakai sekali; setelah Super Admin ada, endpoint setup ditolak.
+- Restore: file rusak ditolak tanpa mengubah data; backup pre-restore dibuat; data kembali sesuai file backup; request lain mendapat 503 selama restore; semua refresh token dicabut setelahnya.
 - Login lockout; guard role (vendor tidak bisa menulis, karyawan tidak bisa mengakses data karyawan lain).
 
 **Unit test:** perhitungan waktu (shift malam melewati tengah malam, `day_offset`, cutoff, jam jemput per titik) dan parser import Excel/CSV.
@@ -443,5 +453,4 @@ Risiko: aturan bisnis di mock bisa menyimpang dari backend asli. Mitigasinya, mo
 - Lupa password mandiri (reset lewat admin)
 - Ubah booking/langganan di tempat (cukup batal lalu buat baru)
 - Distribusi aplikasi mobile ke Play Store/App Store (cara distribusi: APK internal atau store, diputuskan saat implementasi mobile)
-- Restore database lewat UI (restore tetap prosedur manual di server dengan `pg_restore`, terdokumentasi di README; restore lewat web terlalu berisiko karena menimpa seluruh data saat aplikasi sedang berjalan)
 - Mengganti domain, sertifikat HTTPS, atau kredensial database lewat UI (bagian dari instalasi server)
