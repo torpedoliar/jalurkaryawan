@@ -125,13 +125,12 @@ describe("vendor dashboard", () => {
     expect(within(often).getByRole("row", { name: /R1 Cikarang Pagi Jemput 7 dari 7 hari/ })).toBeTruthy();
     expect(within(often).getByRole("row", { name: /R1 Cikarang Pagi Antar 7 dari 7 hari/ })).toBeTruthy();
     expect((await screen.findByText("Permintaan ditolak")).closest("table")!.querySelectorAll("tbody tr")).toHaveLength(28);
-    // Privacy boundary (spec 6.3): the rejected table shows a route id, never a employee id.
     // RejectedRequest carries userId on the same row, so a routeId -> userId swap would typecheck
-    // and still pass every other assertion here; these two are what make that regression fail.
+    // and still pass every other assertion here; these two per-cell checks are what fail it.
+    // (A textContent regex cannot do this: concatenated body text "…ditolak2026-10-14R1…" holds k2026.)
     const rejTable = (await screen.findByText("Permintaan ditolak")).closest("table")!;
     const firstRejected = within(rejTable).getAllByRole("row")[1]!;
     expect(within(firstRejected).getByRole("cell", { name: "r1" })).toBeTruthy();
-    expect(rejTable.textContent).not.toMatch(/k\d{4}/i);
     expect(within(rejTable).getAllByRole("cell").map((c) => c.textContent)).not.toContainEqual(expect.stringMatching(/^k\d{4}$/i));
     await user.click(screen.getByRole("button", { name: "Export Excel" }));
     expect(saved).toEqual([`keterisian-vendor-${FIRST}-${LAST}.xlsx`]);
