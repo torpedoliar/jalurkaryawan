@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, screen, within } from "@testing-library/react";
+import { read, utils as sheetUtils } from "xlsx";
 import { getDb } from "@bms/mock-api";
 import { addDays } from "@bms/shared";
 import { renderApp } from "./render";
@@ -8,13 +9,25 @@ const TODAY = "2026-10-14";
 const FIRST = TODAY;
 const LAST = addDays(TODAY, 6); // 2026-10-20
 
-/** jsdom has no createObjectURL and no navigation on <a>.click(); record the file name instead. */
+/** jsdom has no createObjectURL and no navigation on <a>.click(); record the file name and the blob instead. */
 function captureDownloads() {
   const saved: string[] = [];
-  URL.createObjectURL = vi.fn(() => "blob:x");
+  const blobs: Blob[] = [];
+  URL.createObjectURL = vi.fn((b: Blob) => { blobs.push(b); return "blob:x"; });
   URL.revokeObjectURL = vi.fn();
   vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) { saved.push(this.download); });
-  return saved;
+  return { saved, blobs };
+}
+
+/** The most recent exported workbook, read back. jsdom 25 has no Blob.arrayBuffer(); FileReader is the path that works (ui.tsx's fileBytes proves it). */
+async function readFirstSheet(blobs: Blob[]) {
+  const wb = await new Promise<ReturnType<typeof read>>((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(read(new Uint8Array(fr.result as ArrayBuffer)));
+    fr.onerror = () => reject(fr.error);
+    fr.readAsArrayBuffer(blobs.at(-1)!);
+  });
+  return { names: wb.SheetNames, rows: sheetUtils.sheet_to_json<Record<string, unknown>>(wb.Sheets[wb.SheetNames[0]!]!) };
 }
 
 afterEach(() => vi.restoreAllMocks());
@@ -57,7 +70,7 @@ describe("dashboard", () => {
 
 describe("reports", () => {
   test("occupancy over a range with percentage and export", async () => {
-    const saved = captureDownloads();
+    const { saved, blobs } = captureDownloads();
     const { user } = await renderApp("/laporan", "ga");
     expect(await screen.findByText("252 baris")).toBeTruthy();
     expect((await screen.findAllByRole("cell", { name: "8/8 (100%)" })).length).toBe(14);
@@ -67,13 +80,20 @@ describe("reports", () => {
     await user.click(occ.parentElement!.querySelector("button")!);
     expect(saved).toEqual([`keterisian-${FIRST}-${LAST}.xlsx`]);
 
+    // Read the workbook back: the file name alone would not catch a mangled header or a blank row.
+    const sheet = await readFirstSheet(blobs);
+    const header = Object.keys(sheet.rows[0] ?? {});
+    expect(header).toEqual(["Tanggal", "Rute", "Nama rute", "Shift", "Arah", "Trip", "Kuota", "Terisi", "%", "Ditolak"]);
+    expect(sheet.rows).toHaveLength(252);
+    expect(sheet.rows[0]).toMatchObject({ Tanggal: FIRST, Rute: "R1", "Nama rute": "Cikarang", Arah: "Antar", Kuota: 8, Terisi: 2, "%": 25, Ditolak: 0 });
+
     fireEvent.change(screen.getByLabelText("Dari tanggal"), { target: { value: "2026-10-15" } });
     fireEvent.change(screen.getByLabelText("Sampai tanggal"), { target: { value: "2026-10-14" } });
     expect((await screen.findByRole("alert")).textContent).toContain("Tanggal akhir sebelum tanggal mulai.");
   });
 
   test("rejected requests list the employee id and export", async () => {
-    const saved = captureDownloads();
+    const { saved, blobs } = captureDownloads();
     const { user } = await renderApp("/laporan", "ga");
     const rejected = (await screen.findByText("Permintaan ditolak")).closest("table")!;
     expect(within(rejected).getAllByRole("row")).toHaveLength(29); // header + 28 rows over 7 days
@@ -83,7 +103,7 @@ describe("reports", () => {
   });
 
   test("per-employee booking history exports", async () => {
-    const saved = captureDownloads();
+    const { saved, blobs } = captureDownloads();
     const { user } = await renderApp("/laporan", "ga");
     await user.type(await screen.findByLabelText("Cari karyawan"), "Rina");
     await user.selectOptions(await screen.findByLabelText("Karyawan"), "k1001");
@@ -97,7 +117,7 @@ describe("reports", () => {
 
 describe("vendor dashboard", () => {
   test("occupancy, often-full routes, rejected list and export — no user data", async () => {
-    const saved = captureDownloads();
+    const { saved, blobs } = captureDownloads();
     const { user } = await renderApp("/vendor", "vendor");
     expect(await screen.findByText("252 baris")).toBeTruthy();
     const often = (await screen.findByText("Rute yang sering penuh")).closest("table")!;
@@ -105,6 +125,14 @@ describe("vendor dashboard", () => {
     expect(within(often).getByRole("row", { name: /R1 Cikarang Pagi Jemput 7 dari 7 hari/ })).toBeTruthy();
     expect(within(often).getByRole("row", { name: /R1 Cikarang Pagi Antar 7 dari 7 hari/ })).toBeTruthy();
     expect((await screen.findByText("Permintaan ditolak")).closest("table")!.querySelectorAll("tbody tr")).toHaveLength(28);
+    // Privacy boundary (spec 6.3): the rejected table shows a route id, never a employee id.
+    // RejectedRequest carries userId on the same row, so a routeId -> userId swap would typecheck
+    // and still pass every other assertion here; these two are what make that regression fail.
+    const rejTable = (await screen.findByText("Permintaan ditolak")).closest("table")!;
+    const firstRejected = within(rejTable).getAllByRole("row")[1]!;
+    expect(within(firstRejected).getByRole("cell", { name: "r1" })).toBeTruthy();
+    expect(rejTable.textContent).not.toMatch(/k\d{4}/i);
+    expect(within(rejTable).getAllByRole("cell").map((c) => c.textContent)).not.toContainEqual(expect.stringMatching(/^k\d{4}$/i));
     await user.click(screen.getByRole("button", { name: "Export Excel" }));
     expect(saved).toEqual([`keterisian-vendor-${FIRST}-${LAST}.xlsx`]);
     expect(screen.queryByRole("alert")).toBeNull();
@@ -141,6 +169,26 @@ describe("audit log", () => {
     await user.selectOptions(screen.getByLabelText("Aksi"), "USER_CREATE");
     expect(await screen.findByText("0 log")).toBeTruthy();
     expect(within((await screen.findByText("Log aktivitas")).closest("table")!).queryByRole("row", { name: /USER_SUSPEND/ })).toBeNull();
+
+    // The actor filter narrows to one account: the row above is ga's, so filtering on it keeps it,
+    // while the other seeded admin account (admin) yields nothing. Dropping actorId still passes.
+    await user.selectOptions(screen.getByLabelText("Aksi"), "");
+    expect(await screen.findByText("1 log")).toBeTruthy();
+    await user.selectOptions(screen.getByLabelText("Admin"), "admin");
+    expect(await screen.findByText("0 log")).toBeTruthy();
+    await user.selectOptions(screen.getByLabelText("Admin"), "ga");
+    expect(await screen.findByText("1 log")).toBeTruthy();
+    expect(within((await screen.findByText("Log aktivitas")).closest("table")!).getByRole("row", { name: /USER_SUSPEND/ })).toBeTruthy();
+
+    // The date filter narrows by the row's own createdAt: the row is dated 2026-10-14, so a
+    // window starting the next day excludes it and a window covering it includes it again.
+    fireEvent.change(screen.getByLabelText("Dari tanggal"), { target: { value: "2026-10-15" } });
+    expect(await screen.findByText("0 log")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Dari tanggal"), { target: { value: TODAY } });
+    fireEvent.change(screen.getByLabelText("Sampai tanggal"), { target: { value: addDays(TODAY, -1) } });
+    expect(await screen.findByText("0 log")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Sampai tanggal"), { target: { value: LAST } });
+    expect(await screen.findByText("1 log")).toBeTruthy();
   });
 
   test("admin filter only lists admin accounts", async () => {

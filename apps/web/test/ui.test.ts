@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { BusInput, SubscriptionInput, TripTemplateInput, UserInput, VendorInput } from "@bms/shared";
-import { errorText } from "../src/ui";
+import { errorText, pct } from "../src/ui";
 
 describe("errorText", () => {
   test("ApiFailure keeps the server message verbatim", async () => {
@@ -49,5 +49,17 @@ describe("errorText", () => {
 
   test("unknown errors fall back to the generic Indonesian line", () => {
     expect(errorText(new Error("boom"))).toBe("Terjadi kesalahan. Coba lagi.");
+  });
+});
+
+describe("pct", () => {
+  test("rounds occupancy to whole percent", () => {
+    expect(pct(174, 1314)).toBe(13);
+    expect(pct(10, 50)).toBe(20);
+  });
+
+  test("a zero-capacity trip reads as 0%, not NaN", () => {
+    expect(pct(0, 0)).toBe(0);
+    expect(pct(5, 0)).toBe(0);
   });
 });
