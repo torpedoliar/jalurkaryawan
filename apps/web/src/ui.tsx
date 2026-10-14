@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { ZodError } from "zod";
-import { jakartaDate, type DepartureStatus, type Direction } from "@bms/shared";
+import { jakartaDate, type BookingStatus, type DepartureStatus, type Direction } from "@bms/shared";
 import { ApiFailure } from "./api";
 
 export function errorText(e: unknown): string {
@@ -55,3 +55,20 @@ export const DIRECTION_LABEL: Record<Direction, string> = { PICKUP: "Jemput", DR
 export const hhmm = (iso: string) => iso.slice(11, 16);
 /** Operational date (Asia/Jakarta) from the browser clock. */
 export const today = () => jakartaDate(new Date());
+
+export const BOOKING_STATUS_TEXT: Record<BookingStatus, string> = { BOOKED: "Terbooked", CANCELLED: "Dibatalkan", NO_SHOW: "Tidak hadir" };
+
+/** ISO weekday 1 = Senin .. 7 = Minggu. Used by Langganan and the trip template form. */
+export const DAYS = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
+export const dayNames = (weekdays: number[]) => weekdays.map((d) => DAYS[d - 1]).join(", ");
+export function WeekdayPicker({ value, onChange }: { value: number[]; onChange(v: number[]): void }) {
+  const toggle = (d: number) => onChange(value.includes(d) ? value.filter((x) => x !== d) : [...value, d].sort());
+  return (
+    <fieldset className="row">
+      <legend>Hari</legend>
+      {DAYS.map((d, i) => (
+        <label key={d}><input type="checkbox" checked={value.includes(i + 1)} onChange={() => toggle(i + 1)} />{d}</label>
+      ))}
+    </fieldset>
+  );
+}
