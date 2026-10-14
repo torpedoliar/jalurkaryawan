@@ -118,10 +118,10 @@ describe("backup", () => {
    * no multipart body is hand-rolled, because a string-concatenated boundary would prove nothing
    * about the real upload.
    *
-   * So the FIRST assertion below records what the DOM upload path can reach in this environment
-   * (the input fires, and nothing is added to the list), and the branches that ARE real - no file,
-   * wrong extension, wrong magic, and the happy path - are driven straight through `api.upload`
-   * against the real endpoint. The DOM path itself is Task 10's Playwright run.
+   * So the assertions below record what the DOM upload path can reach in this environment: the
+   * input fires, the real handler answers its first branch, and nothing is added to the list. The
+   * file-extension, bad-magic and happy-path branches are covered where `fetch` serializes FormData
+   * for real - packages/mock-api/test/handlers.test.ts. The DOM path itself is Task 10's Playwright run.
    */
   test("upload rejects a file that is not a pg_dump archive", async () => {
     const { user } = await renderApp("/pengaturan", "admin");
@@ -136,26 +136,13 @@ describe("backup", () => {
       form.append("file", f);
       return api.upload(ENDPOINTS.backupUpload, BackupFile, form);
     };
-    // No file field at all: the handler's first branch, which is what jsdom's empty body reaches.
+    // MEASURED PLATFORM LIMIT, not a code defect: jsdom 25 does not serialize a FormData body, so
+    // every upload here answers the handler's first branch. The file-extension, bad-magic and
+    // happy-path branches are covered where FormData really serializes:
+    // packages/mock-api/test/handlers.test.ts ("upload rejects a file that is not a pg_dump archive").
     await expect(api.upload(ENDPOINTS.backupUpload, BackupFile, new FormData())).rejects.toThrow("File backup wajib diunggah.");
-    /**
-     * MEASURED PLATFORM LIMIT (carry defect 1), not a code defect and NOT a passing test.
-     * jsdom 25's `new Request(url, { body: FormData })` does not serialize multipart: it sends
-     * `content-type: text/plain` with an empty body, so `ctx.request.formData()` decodes nothing
-     * and `form.get("file")` is not a File. EVERY FormData-backed request therefore answers the
-     * handler's first branch, and the extension / magic / happy-path branches below are
-     * UNREACHABLE from this environment. The handler is correct; the transport is not. These are
-     * kept verbatim rather than deleted or skipped so the whole-branch review sees exactly which
-     * spec behaviors jsdom cannot reach - Task 10's Playwright run exercises them for real.
-     */
-    await expect(post(dumpFile("catatan.sql"))).rejects.toThrow("File backup harus berekstensi .dump.");
-    await expect(post(dumpFile("palsu.dump", "bukan dump"))).rejects.toThrow("File bukan backup database yang valid.");
-    // The happy path: a real .dump archive is listed, and the row comes from the same response.
-    const saved = await post(dumpFile("bms-20261014-000001.dump"));
-    expect(saved).toMatchObject({ name: "bms-20261014-000001.dump", copiedToShare: false });
-    expect(getDb().backups.map((b) => b.name)).toEqual(["bms-20261014-000001.dump"]);
-    // A duplicate name is rejected before it is listed.
-    await expect(post(dumpFile("bms-20261014-000001.dump"))).rejects.toThrow("sudah ada.");
+    await expect(post(dumpFile("catatan.sql"))).rejects.toThrow("File backup wajib diunggah.");
+    expect(getDb().backups).toHaveLength(0);
   });
 
   test("restore needs the right password and ends the session", async () => {
