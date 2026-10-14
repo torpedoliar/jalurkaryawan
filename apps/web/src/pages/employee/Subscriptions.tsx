@@ -49,22 +49,26 @@ export function Subscriptions() {
         <button className="primary" disabled={busy || !choice.stopId || weekdays.length === 0}>Buat langganan</button>
       </form>
       <section className="card">
-        <table>
-          <thead><tr><th>Rute</th><th>Shift</th><th>Arah</th><th>Periode</th><th>Hari</th><th>Status</th><th></th></tr></thead>
-          <tbody>
-            {list.data?.map((s) => (
-              <tr key={s.id}>
-                <td>{routeCode(s.routeId)}</td>
-                <td>{shiftName(s.shiftId)}</td>
-                <td>{DIRECTION_LABEL[s.direction]}</td>
-                <td>{s.startDate} s/d {s.endDate ?? "seterusnya"}</td>
-                <td>{dayNames(s.weekdays)}</td>
-                <td>{s.status === "ACTIVE" ? "Aktif" : "Berakhir"}</td>
-                <td>{s.status === "ACTIVE" && <button disabled={busy} onClick={() => void end(s.id)}>Akhiri</button>}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        {list.data?.length === 0 && <p>Belum ada langganan.</p>}
+        {/* Only with rows: no empty header grid, and no loading-pass layout jump. */}
+        {list.data && list.data.length > 0 && (
+          <table>
+            <thead><tr><th>Rute</th><th>Shift</th><th>Arah</th><th>Periode</th><th>Hari</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              {list.data.map((s) => (
+                <tr key={s.id}>
+                  <td>{routeCode(s.routeId)}</td>
+                  <td>{shiftName(s.shiftId)}</td>
+                  <td>{DIRECTION_LABEL[s.direction]}</td>
+                  <td>{s.startDate} s/d {s.endDate ?? "seterusnya"}</td>
+                  <td>{dayNames(s.weekdays)}</td>
+                  <td>{s.status === "ACTIVE" ? "Aktif" : "Berakhir"}</td>
+                  <td>{s.status === "ACTIVE" && <button disabled={busy} onClick={() => void end(s.id)}>Akhiri</button>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </section>
     </>
   );

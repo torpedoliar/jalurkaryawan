@@ -85,6 +85,8 @@ export function Book() {
         <p>
           Sisa kursi: {a.capacity - a.bookedCount} dari {a.capacity}
           {a.firstDepartureAt && <> · berangkat {hhmm(a.firstDepartureAt)} · batas booking {a.cutoffAt && hhmm(a.cutoffAt)}</>}
+          {/* bookable === false covers two causes; the cutoff instant is already in hand, so name it separately. */}
+          {a.cutoffAt && Date.now() >= Date.parse(a.cutoffAt) && <> · batas booking sudah lewat</>}
           {!a.bookable && <> · tidak bisa dibooking</>}
         </p>
       )}
