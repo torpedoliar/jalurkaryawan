@@ -11,6 +11,7 @@ import { Admins } from "./pages/admin/Admins";
 import { Employees } from "./pages/admin/Employees";
 import { RoutesStops } from "./pages/admin/Routes";
 import { ShiftsTemplates } from "./pages/admin/ShiftsTemplates";
+import { Trips } from "./pages/admin/Trips";
 import { VendorsBuses } from "./pages/admin/VendorsBuses";
 
 export interface Page { path: string; label: string; roles: readonly Role[]; element: ReactNode }
@@ -30,6 +31,7 @@ export const PAGES: Page[] = [
   { path: "/vendor-bus", label: "Vendor & Bus", roles: ADM, element: <VendorsBuses /> },
   { path: "/rute", label: "Rute & Titik", roles: ADM, element: <RoutesStops /> },
   { path: "/shift-jadwal", label: "Shift & Jadwal", roles: ADM, element: <ShiftsTemplates /> },
+  { path: "/trip", label: "Trip Harian", roles: ADM, element: <Trips /> },
   { path: "/karyawan", label: "Karyawan", roles: ADM, element: <Employees /> },
   { path: "/admin-user", label: "Admin & Vendor", roles: SUPER, element: <Admins /> },
   { path: "/keberangkatan", label: "Papan Keberangkatan", roles: ALL, element: <Departures /> },

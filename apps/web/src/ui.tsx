@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { ZodError, type ZodTypeAny } from "zod";
-import { read, utils } from "xlsx";
+import { read, utils, write } from "xlsx";
 import { jakartaDate, type BookingStatus, type DepartureStatus, type Direction } from "@bms/shared";
-import { ApiFailure, api } from "./api";
+import { ApiFailure, api, saveBlob } from "./api";
 
 const NUM: Record<string, string | undefined> = { string: "karakter", array: "elemen" };
 
@@ -139,4 +139,11 @@ export function Pager({ data, page, onPage }: { data?: { total: number; pageSize
       <button disabled={page >= pages} onClick={() => onPage(page + 1)}>Berikutnya</button>
     </div>
   );
+}
+
+/** One-sheet workbook; object keys become the header row. */
+export function downloadXlsx(rows: Record<string, unknown>[], fileName: string): void {
+  const wb = utils.book_new();
+  utils.book_append_sheet(wb, utils.json_to_sheet(rows), "Data");
+  saveBlob(new Blob([write(wb, { type: "array", bookType: "xlsx" })]), fileName);
 }

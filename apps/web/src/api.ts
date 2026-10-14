@@ -77,10 +77,13 @@ async function request<T extends ZodTypeAny>(method: string, path: string, schem
 /** Save a blob through a temporary <a download>. */
 export function saveBlob(blob: Blob, fileName: string): void {
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
+  const url = URL.createObjectURL(blob);
+  a.href = url;
   a.download = fileName;
   a.click();
-  URL.revokeObjectURL(a.href);
+  // Revoke in its own task: one-time initial passwords download through this and exist in exactly one API response,
+  // so a revoke racing the queued download would destroy credentials instead of a re-downloadable report.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 export const api = {
