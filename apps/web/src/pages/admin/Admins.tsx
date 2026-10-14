@@ -3,7 +3,7 @@ import { z } from "zod";
 import { ENDPOINTS, Paginated, TempPassword, UserInput, UserSummary, Vendor, type Role } from "@bms/shared";
 import { api } from "../../api";
 import { ErrorText, useAction, useLoad } from "../../ui";
-import { TempPasswords } from "./Employees";
+import { addPasswords, TempPasswords } from "./Employees";
 
 const ROLES = ["SUPER_ADMIN", "ADMIN_GA", "VENDOR"] as const satisfies readonly Role[];
 const ROLE_LABEL: Record<string, string> = { SUPER_ADMIN: "Super Admin", ADMIN_GA: "Admin GA", VENDOR: "Vendor" };
@@ -26,24 +26,18 @@ export function Admins() {
   async function save(e: FormEvent) {
     e.preventDefault();
     const { id, vendorId, ...rest } = f;
-    // Split so each run() call has one concrete return type; the refine input type is wider than the output.
-    const res = id
-      ? await run(() => {
-          const body = UserInput.parse({ ...rest, vendorId: rest.role === "VENDOR" ? vendorId || null : null });
-          return api.put(ENDPOINTS.user(id), UserSummary, body);
-        })
-      : await run(() => {
-          const body = UserInput.parse({ ...rest, vendorId: rest.role === "VENDOR" ? vendorId || null : null });
-          return api.post(ENDPOINTS.users, TempPassword, body);
-        });
+    const res = await run(async () => {
+      const body = UserInput.parse({ ...rest, vendorId: rest.role === "VENDOR" ? vendorId || null : null });
+      return id ? await api.put(ENDPOINTS.user(id), UserSummary, body) : await api.post(ENDPOINTS.users, TempPassword, body);
+    });
     if (!res) return;
-    if ("tempPassword" in res) setPasswords([res]);
+    if ("tempPassword" in res) setPasswords((p) => addPasswords(p, [res]));
     setF(NEW_ACCOUNT);
     list.reload();
   }
   async function resetPassword(id: string) {
     const tp = await run(() => api.post(ENDPOINTS.userResetPassword(id), TempPassword));
-    if (tp) setPasswords([tp]);
+    if (tp) setPasswords((p) => addPasswords(p, [tp]));
   }
   async function deactivate(id: string) {
     if (await run(() => api.post(ENDPOINTS.userDeactivate(id), UserSummary))) { setOffId(""); list.reload(); }

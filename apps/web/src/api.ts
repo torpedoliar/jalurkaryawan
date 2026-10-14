@@ -74,6 +74,15 @@ async function request<T extends ZodTypeAny>(method: string, path: string, schem
   return schema.parse(res.status === 204 ? undefined : await res.json());
 }
 
+/** Save a blob through a temporary <a download>. */
+export function saveBlob(blob: Blob, fileName: string): void {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = fileName;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 export const api = {
   get: <T extends ZodTypeAny>(path: string, schema: T, query?: Query) => request("GET", path, schema, { query }),
   post: <T extends ZodTypeAny>(path: string, schema: T, body?: unknown) => request("POST", path, schema, { body }),
@@ -81,12 +90,7 @@ export const api = {
   upload: <T extends ZodTypeAny>(path: string, schema: T, form: FormData) => request("POST", path, schema, { form }),
   /** Needs the bearer header, so a plain <a href> cannot do it. */
   async download(path: string, fileName: string): Promise<void> {
-    const blob = await (await call("GET", path)).blob();
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = fileName;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    saveBlob(await (await call("GET", path)).blob(), fileName);
   },
 };
 

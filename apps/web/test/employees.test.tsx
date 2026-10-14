@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { fireEvent, screen, within } from "@testing-library/react";
 import { utils, write } from "xlsx";
 import { getDb } from "@bms/mock-api";
@@ -26,6 +26,74 @@ describe("employees", () => {
     expect(getDb().users.find((u) => u.nik === "K1001")!.name).toBe("Rina W");
     await user.click(screen.getByRole("button", { name: "Tutup" }));
     expect(screen.queryByText(/Password sementara/)).toBeNull();
+  });
+
+  test("reset password keeps every earlier one-time password", async () => {
+    const { user } = await renderApp("/karyawan", "ga");
+    await user.upload(await screen.findByLabelText("File Excel"), xlsxFile([
+      { NIK: "K2001", Nama: "Baru Satu", Departemen: "QC", "No HP": "0813" },
+      { NIK: "K2002", Nama: "Baru Dua", Departemen: "QC", "No HP": "0814" },
+    ]));
+    await user.click(await screen.findByRole("button", { name: "Simpan import" }));
+    const table = () => screen.getByText(/Password sementara/).closest("table")!;
+    expect(within(table()).getByRole("cell", { name: "K2001" })).toBeTruthy();
+
+    // Reset an unrelated employee: the two imported passwords must survive (the endpoint serves them only once).
+    const row = (await screen.findByRole("cell", { name: "Budi Santoso" })).closest("tr")!;
+    await user.click(within(row).getByRole("button", { name: "Reset password" }));
+    expect(within(table()).getByRole("cell", { name: "K1002" })).toBeTruthy();
+    expect(within(table()).getByRole("cell", { name: "K2001" })).toBeTruthy();
+    expect(within(table()).getByRole("cell", { name: "K2002" })).toBeTruthy();
+
+    // Re-resetting the same user supersedes his row instead of adding a second one.
+    await user.click(within(row).getByRole("button", { name: "Reset password" }));
+    expect(within(table()).getAllByRole("cell", { name: "K1002" }).length).toBe(1);
+    expect(within(table()).getAllByRole("cell", { name: "K2001" }).length).toBe(1);
+  });
+
+  test("an expired suspension reads as Aktif", async () => {
+    const { user } = await renderApp("/karyawan", "ga");
+    await user.type(await screen.findByLabelText("Cari NIK / nama"), "Budi Santoso");
+    const row = () => screen.getByRole("cell", { name: "Budi Santoso" }).closest("tr")!;
+    await user.click(within(row()).getByRole("button", { name: "Bekukan" }));
+    fireEvent.change(screen.getByLabelText("Beku sampai"), { target: { value: "2026-10-15" } });
+    await user.type(screen.getByLabelText("Alasan"), "Sementara");
+    await user.click(screen.getByRole("button", { name: "Simpan pembekuan" }));
+    expect(within(row()).getByRole("cell", { name: "Beku s/d 2026-10-15" })).toBeTruthy();
+
+    // Test clock 2026-10-14; moving to 2026-10-16 makes that end date past, which every other screen reads as none.
+    vi.setSystemTime(new Date("2026-10-16T09:00:00+07:00"));
+    fireEvent.change(screen.getByLabelText("Cari NIK / nama"), { target: { value: "Budi Santos" } });
+    expect(await within(row()).findByRole("cell", { name: "Aktif" })).toBeTruthy();
+    expect(within(row()).queryByRole("button", { name: "Cabut pembekuan" })).toBeNull();
+    expect(within(row()).getByRole("button", { name: "Bekukan" })).toBeTruthy();
+    vi.setSystemTime(new Date("2026-10-14T00:00:00+07:00"));
+  });
+
+  test("lowercase CSV headers import", async () => {
+    const { user } = await renderApp("/karyawan", "ga");
+    // SheetJS coerces a numeric-looking cell, so a phone with a leading 0 loses it in any format (xlsx included); the header mapping is what this covers.
+    const csv = new File([new TextEncoder().encode("nik,nama,departemen,no hp\nK2003,Baru Tiga,QC,0812 ext 5\n")], "karyawan.csv");
+    await user.upload(await screen.findByLabelText("File Excel"), csv);
+    expect(await screen.findByText("Baru: 1 · Diperbarui: 0 · Error: 0")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Simpan import" }));
+    expect(within(screen.getByText(/Password sementara/).closest("table")!).getByRole("cell", { name: "K2003" })).toBeTruthy();
+    expect(getDb().users.find((u) => u.nik === "K2003")).toMatchObject({ name: "Baru Tiga", department: "QC", phone: "0812 ext 5" });
+  });
+
+  test("a list change closes the row-scoped suspend form", async () => {
+    const { user } = await renderApp("/karyawan", "ga");
+    expect(await screen.findByText("Halaman 1 dari 2")).toBeTruthy();
+    await user.type(screen.getByLabelText("Cari NIK / nama"), "Budi");
+    const row = screen.getByRole("cell", { name: "Budi Santoso" }).closest("tr")!;
+    await user.click(within(row).getByRole("button", { name: "Bekukan" }));
+    expect(screen.getByLabelText("Beku sampai")).toBeTruthy();
+
+    // Searching so the row disappears must drop the form rather than leave it bound to a row nobody can see.
+    fireEvent.change(screen.getByLabelText("Cari NIK / nama"), { target: { value: "Siti" } });
+    expect(await screen.findByRole("cell", { name: "Siti Aminah" })).toBeTruthy();
+    expect(screen.queryByLabelText("Beku sampai")).toBeNull();
+    expect(getDb().users.find((u) => u.id === "k1002")!.bookingSuspendedUntil).toBeNull();
   });
 
   test("file with errors lists rows and blocks commit", async () => {
@@ -99,6 +167,22 @@ describe("admin & vendor accounts", () => {
     expect(within(table).getByRole("cell", { name: "op2" })).toBeTruthy();
     expect(getDb().users.find((u) => u.nik === "op2")).toMatchObject({ role: "VENDOR", vendorId: "v2" });
     expect(await screen.findByRole("cell", { name: "Operator Mitra" })).toBeTruthy();
+  });
+
+  test("creating a second account keeps the first account's password", async () => {
+    const { user } = await renderApp("/admin-user", "admin");
+    await screen.findByLabelText("NIK");
+    const create = async (nik: string, name: string) => {
+      await user.type(screen.getByLabelText("NIK"), nik);
+      await user.type(screen.getByLabelText("Nama"), name);
+      await user.click(screen.getByRole("button", { name: "Simpan akun" }));
+      await screen.findByText(/Password sementara/);
+    };
+    await create("op9", "Operator Sembilan");
+    await create("op8", "Operator Delapan");
+    const table = screen.getByText(/Password sementara/).closest("table")!;
+    expect(within(table).getByRole("cell", { name: "op9" })).toBeTruthy();
+    expect(within(table).getByRole("cell", { name: "op8" })).toBeTruthy();
   });
 
   test("vendor role without vendor is rejected client-side", async () => {

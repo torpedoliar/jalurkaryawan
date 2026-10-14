@@ -102,7 +102,7 @@ export function WeekdayPicker({ value, onChange }: { value: number[]; onChange(v
 export const upsert = <T extends ZodTypeAny>(id: string, list: string, item: (id: string) => string, schema: T, body: unknown) =>
   id ? api.put(item(id), schema, body) : api.post(list, schema, body);
 
-const IMPORT_HEADERS: Record<string, string> = { NIK: "nik", Nama: "name", Departemen: "department", "No HP": "phone" };
+const IMPORT_HEADERS: Record<string, string> = { nik: "nik", nama: "name", departemen: "department", "no hp": "phone" };
 
 /** jsdom 25 has no Blob.arrayBuffer(); FileReader is the path that works in jsdom and in a real browser. */
 function fileBytes(file: File): Promise<ArrayBuffer> {
@@ -116,9 +116,17 @@ function fileBytes(file: File): Promise<ArrayBuffer> {
 
 /** First sheet as raw rows with API field names. Validation is the server's job (preview). */
 export async function readXlsx(file: File): Promise<unknown[]> {
-  const wb = read(await fileBytes(file));
-  const rows = utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[wb.SheetNames[0]!]!, { defval: "" });
-  return rows.map((r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [IMPORT_HEADERS[k.trim()] ?? k, v])));
+  let wb;
+  try {
+    wb = read(await fileBytes(file));
+  } catch {
+    // SheetJS reads arbitrary bytes as an empty workbook, so a corrupt file would otherwise look like a valid file with no rows.
+    throw new Error(`File ${file.name} bukan format Excel atau CSV yang bisa dibaca.`);
+  }
+  const first = wb.SheetNames[0];
+  if (!first) throw new Error("File tidak berisi sheet.");
+  const rows = utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[first]!, { defval: "" });
+  return rows.map((r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [IMPORT_HEADERS[k.trim().toLowerCase()] ?? k, v])));
 }
 
 /** Prev/next for `Paginated` lists (mock and backend page size 50). */
