@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { ZodError, type ZodTypeAny } from "zod";
+import { read, utils } from "xlsx";
 import { jakartaDate, type BookingStatus, type DepartureStatus, type Direction } from "@bms/shared";
 import { ApiFailure, api } from "./api";
 
@@ -100,3 +101,34 @@ export function WeekdayPicker({ value, onChange }: { value: number[]; onChange(v
 /** Admin forms: empty id creates (POST list path), otherwise updates (PUT item path). */
 export const upsert = <T extends ZodTypeAny>(id: string, list: string, item: (id: string) => string, schema: T, body: unknown) =>
   id ? api.put(item(id), schema, body) : api.post(list, schema, body);
+
+const IMPORT_HEADERS: Record<string, string> = { NIK: "nik", Nama: "name", Departemen: "department", "No HP": "phone" };
+
+/** jsdom 25 has no Blob.arrayBuffer(); FileReader is the path that works in jsdom and in a real browser. */
+function fileBytes(file: File): Promise<ArrayBuffer> {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(fr.result as ArrayBuffer);
+    fr.onerror = () => reject(fr.error);
+    fr.readAsArrayBuffer(file);
+  });
+}
+
+/** First sheet as raw rows with API field names. Validation is the server's job (preview). */
+export async function readXlsx(file: File): Promise<unknown[]> {
+  const wb = read(await fileBytes(file));
+  const rows = utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[wb.SheetNames[0]!]!, { defval: "" });
+  return rows.map((r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [IMPORT_HEADERS[k.trim()] ?? k, v])));
+}
+
+/** Prev/next for `Paginated` lists (mock and backend page size 50). */
+export function Pager({ data, page, onPage }: { data?: { total: number; pageSize: number }; page: number; onPage(p: number): void }) {
+  const pages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
+  return (
+    <div className="row">
+      <button disabled={page <= 1} onClick={() => onPage(page - 1)}>Sebelumnya</button>
+      <span>Halaman {page} dari {pages}</span>
+      <button disabled={page >= pages} onClick={() => onPage(page + 1)}>Berikutnya</button>
+    </div>
+  );
+}
