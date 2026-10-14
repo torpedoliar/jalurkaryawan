@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { ZodError } from "zod";
+import { ZodError, type ZodTypeAny } from "zod";
 import { jakartaDate, type BookingStatus, type DepartureStatus, type Direction } from "@bms/shared";
-import { ApiFailure } from "./api";
+import { ApiFailure, api } from "./api";
 
 export function errorText(e: unknown): string {
   if (e instanceof ApiFailure) return e.message;
@@ -72,3 +72,7 @@ export function WeekdayPicker({ value, onChange }: { value: number[]; onChange(v
     </fieldset>
   );
 }
+
+/** Admin forms: empty id creates (POST list path), otherwise updates (PUT item path). */
+export const upsert = <T extends ZodTypeAny>(id: string, list: string, item: (id: string) => string, schema: T, body: unknown) =>
+  id ? api.put(item(id), schema, body) : api.post(list, schema, body);
