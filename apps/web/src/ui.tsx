@@ -105,7 +105,7 @@ export const upsert = <T extends ZodTypeAny>(id: string, list: string, item: (id
 const IMPORT_HEADERS: Record<string, string> = { nik: "nik", nama: "name", departemen: "department", "no hp": "phone" };
 
 /** jsdom 25 has no Blob.arrayBuffer(); FileReader is the path that works in jsdom and in a real browser. */
-function fileBytes(file: File): Promise<ArrayBuffer> {
+export function fileBytes(file: File): Promise<ArrayBuffer> {
   return new Promise((resolve, reject) => {
     const fr = new FileReader();
     fr.onload = () => resolve(fr.result as ArrayBuffer);

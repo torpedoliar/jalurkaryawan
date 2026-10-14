@@ -13,6 +13,7 @@ import { Dashboard } from "./pages/admin/Dashboard";
 import { Employees } from "./pages/admin/Employees";
 import { Reports } from "./pages/admin/Reports";
 import { RoutesStops } from "./pages/admin/Routes";
+import { SettingsScreen } from "./pages/admin/SettingsScreen";
 import { ShiftsTemplates } from "./pages/admin/ShiftsTemplates";
 import { Trips } from "./pages/admin/Trips";
 import { VendorsBuses } from "./pages/admin/VendorsBuses";
@@ -42,6 +43,7 @@ export const PAGES: Page[] = [
   { path: "/dashboard", label: "Dashboard", roles: ADM, element: <Dashboard /> },
   { path: "/laporan", label: "Laporan", roles: ADM, element: <Reports /> },
   { path: "/audit", label: "Audit Log", roles: ADM, element: <Audit /> },
+  { path: "/pengaturan", label: "Pengaturan", roles: SUPER, element: <SettingsScreen /> },
   { path: "/vendor", label: "Dashboard Vendor", roles: VEN, element: <VendorHome /> },
   { path: "/keberangkatan", label: "Papan Keberangkatan", roles: ALL, element: <Departures /> },
   { path: "/ganti-password", label: "Ganti Password", roles: ALL, element: <ChangePassword /> },
