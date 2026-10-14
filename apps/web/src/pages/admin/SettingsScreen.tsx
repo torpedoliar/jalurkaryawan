@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { z } from "zod";
-import { BackupFile, ENDPOINTS, RestoreRequest, SETTING_GROUPS, Settings, SettingsUpdate, SettingsView } from "@bms/shared";
+import { BackupFile, ENDPOINTS, SECRET_SETTING_KEYS, SETTING_GROUPS, Settings, SettingsUpdate, SettingsView } from "@bms/shared";
 import { api } from "../../api";
 import { useAuth } from "../../auth";
 import { ErrorText, errorText, fileBytes, useAction, useLoad } from "../../ui";
@@ -30,8 +30,8 @@ const KEYS: Record<keyof Settings, { label: string; kind: string; placeholder?: 
 
 type Key = keyof typeof KEYS;
 type Draft = Record<string, string | boolean>;
-/** The two keys whose values the API never returns. `SECRET_SETTING_KEYS` from @bms/shared is the same list. */
-type SecretKey = "fcm_service_account" | "backup_share_password";
+/** The two keys whose values the API never returns: shared list is the single source of truth. */
+type SecretKey = (typeof SECRET_SETTING_KEYS)[number];
 /** Secrets never come back from the API, so the draft tracks only what the user typed. `key in pending` marks a send; `""` clears. */
 type Pending = Partial<Record<SecretKey, string>>;
 
@@ -59,9 +59,8 @@ function toDraft(v: SettingsView): Draft {
  * every render, so React remounts each input per keystroke - focus is lost mid-typing and every
  * character but the first is dropped.
  */
-function Row({ k, value, pending, set, setPending, pickFcm }: {
-  k: Key; value: Draft; pending: Pending; set(k: Key): (v: string | boolean) => void;
-  setPending(f: (s: Pending) => Pending): void; pickFcm(f: File | undefined): Promise<void>;
+function Row({ k, value, set, pickFcm }: {
+  k: Key; value: Draft; set(k: Key): (v: string | boolean) => void; pickFcm(f: File | undefined): Promise<void>;
 }) {
   const m = KEYS[k];
   const id = `s-${k}`;
@@ -73,7 +72,6 @@ function Row({ k, value, pending, set, setPending, pickFcm }: {
       {m.kind === "text" && <input id={id} value={String(value[k])} placeholder={m.placeholder} onChange={(e) => set(k)(e.target.value)} />}
       {m.kind === "bool" && <input id={id} type="checkbox" checked={Boolean(value[k])} onChange={(e) => set(k)(e.target.checked)} />}
       {m.kind === "file" && <input id={id} type="file" accept=".json" onChange={(e) => void pickFcm(e.target.files?.[0])} />}
-      {m.kind === "secret" && <input id={id} type="password" value={pending[k as SecretKey] ?? ""} onChange={(e) => setPending((s) => ({ ...s, [k as SecretKey]: e.target.value }))} />}
     </label>
   );
 }
@@ -136,15 +134,19 @@ export function SettingsScreen() {
   return (
     <>
       <h1>Pengaturan</h1>
-      <ErrorText error={load.error ?? save.error} />
+      {/* One alert surface for the whole screen: ErrorText is role="alert", so a second copy anywhere
+          (two are what made findByRole("alert") ambiguous before) both repeats the message to the user
+          and hides whichever source the second block does not read. load, save, the backup list and
+          every backup-tab action all report here. */}
+      <ErrorText error={load.error ?? save.error ?? list.error ?? act.error} />
       {msg && <p role="status">{msg}</p>}
       {load.data && (
         <form onSubmit={submit}>
           <nav>{TAB_KEYS.map((k) => <button key={k} type="button" onClick={() => setTab(k)}>{TAB_LABEL[k]}</button>)}</nav>
 
           <section className="card">
-            {load.data && SETTING_GROUPS[tab].filter((k) => k !== "backup_share_password").map((k) => (
-              <Row key={k} k={k as Key} value={value} pending={pending} set={set} setPending={setPending} pickFcm={pickFcm} />
+            {SETTING_GROUPS[tab].filter((k) => k !== "backup_share_password").map((k) => (
+              <Row key={k} k={k as Key} value={value} set={set} pickFcm={pickFcm} />
             ))}
             {tab === "backup" && (
               <>
@@ -160,7 +162,7 @@ export function SettingsScreen() {
                 </p>
                 <p>Status: {load.data.backup_share_password.isSet ? "Tersimpan" : "Belum diisi"}</p>
                 <div className="row">
-                  <button type="button" onClick={() => setPending((s) => ({ ...s, backup_share_password: "" }))}>Hapus</button>
+                  <button type="button" onClick={() => setPending((s) => ({ ...s, backup_share_password: "" }))}>Hapus password share</button>
                   <button type="button" disabled={act.busy} onClick={async () => setMsg((await act.run(() => api.post(ENDPOINTS.settingsTestShare, TestResult)))?.message ?? "")}>Tes koneksi share</button>
                 </div>
               </>
@@ -180,10 +182,6 @@ export function SettingsScreen() {
         <>
           <section className="card">
             <h2>Backup database</h2>
-            {/* One alert surface for the whole backup tab: ErrorText is role="alert", so a second
-                copy in the restore card would repeat the same message to the user and make
-                findByRole("alert") ambiguous. */}
-            <ErrorText error={list.error ?? act.error} />
             <div className="row">
               <button type="button" disabled={act.busy} onClick={async () => { if (await act.run(() => api.post(ENDPOINTS.backupRun, BackupFile))) { setMsg("Backup dibuat."); list.reload(); } }}>Backup sekarang</button>
               <label htmlFor="up">File backup<input id="up" type="file" accept=".dump" onChange={(e) => void upload(e.target.files?.[0])} /></label>
@@ -206,24 +204,34 @@ export function SettingsScreen() {
             )}
           </section>
 
-          <section className="card">
-            <h2>Pulihkan dari backup</h2>
-            <p>Seluruh sesi login akan diakhiri setelah pemulihan selesai, dan kamu diminta masuk lagi.</p>
-            <label htmlFor="rf">File backup tujuan<input id="rf" value={file} onChange={(e) => setFile(e.target.value)} placeholder="bms-20261014-000000.dump" /></label>
-            <label htmlFor="rp">Password kamu<input id="rp" type="password" value={pw} onChange={(e) => setPw(e.target.value)} /></label>
-            <label htmlFor="rc">Ketik RESTORE<input id="rc" value={confirm} onChange={(e) => setConfirm(e.target.value)} /></label>
-            <button
-              className="primary"
-              disabled={act.busy || !file || confirm !== "RESTORE"}
-              onClick={async () => {
-                // confirm is the literal the schema requires; the button stays disabled until the field matches.
-                const out = await act.run(() => api.post(ENDPOINTS.restore, RestoreResponse, { fileName: file, password: pw, confirm: "RESTORE" }));
-                if (out) { setMsg(`Backup pra-pemulihan: ${out.preRestore.name}`); await signOut(); }
-              }}
-            >
-              Pulihkan database
-            </button>
-          </section>
+          {(list.data?.length ?? 0) > 0 ? (
+            <section className="card">
+              <h2>Pulihkan dari backup</h2>
+              <p>Seluruh sesi login akan diakhiri setelah pemulihan selesai, dan kamu diminta masuk lagi.</p>
+              {/* Spec 5.11: pick from the backup list, never free text - the list is the only source of a name the API can restore. */}
+              <label htmlFor="rf">File backup tujuan
+                <select id="rf" value={file} onChange={(e) => setFile(e.target.value)}>
+                  <option value="">Pilih file backup…</option>
+                  {list.data?.map((b) => <option key={b.name} value={b.name}>{b.name}</option>)}
+                </select>
+              </label>
+              <label htmlFor="rp">Password kamu<input id="rp" type="password" value={pw} onChange={(e) => setPw(e.target.value)} /></label>
+              <label htmlFor="rc">Ketik RESTORE<input id="rc" value={confirm} onChange={(e) => setConfirm(e.target.value)} /></label>
+              <button
+                className="primary"
+                disabled={act.busy || !file || confirm !== "RESTORE"}
+                onClick={async () => {
+                  // confirm is the literal the schema requires; the button stays disabled until the field matches.
+                  const out = await act.run(() => api.post(ENDPOINTS.restore, RestoreResponse, { fileName: file, password: pw, confirm: "RESTORE" }));
+                  if (out) await signOut();
+                }}
+              >
+                Pulihkan database
+              </button>
+            </section>
+          ) : (
+            <p>Belum ada file backup untuk dipulihkan.</p>
+          )}
         </>
       )}
     </>

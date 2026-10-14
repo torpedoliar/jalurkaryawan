@@ -66,7 +66,7 @@ describe("pengaturan", () => {
     const reloaded = (await screen.findByText("Password share")).closest("section")!;
     expect(reloaded.textContent).toContain("Tersimpan");
     expect(reloaded.textContent).not.toContain("rahasia");
-    await again.click(within(reloaded).getByRole("button", { name: "Hapus" }));
+    await again.click(within(reloaded).getByRole("button", { name: "Hapus password share" }));
     await again.click(screen.getByRole("button", { name: "Simpan pengaturan" }));
     expect((await screen.findByRole("status")).textContent).toContain("Pengaturan disimpan.");
     expect(getDb().settings.backup_share_password).toBe("");
@@ -151,7 +151,7 @@ describe("backup", () => {
     await user.click(screen.getByRole("button", { name: "Backup sekarang" }));
     const name = getDb().backups[0]!.name;
     const sessionsBefore = getDb().sessions.size;
-    await user.type(screen.getByLabelText("File backup tujuan"), name);
+    await user.selectOptions(screen.getByLabelText("File backup tujuan"), name);
     await user.type(screen.getByLabelText("Ketik RESTORE"), "RESTORE");
     await user.type(screen.getByLabelText("Password kamu"), "salah");
     await user.click(screen.getByRole("button", { name: "Pulihkan database" }));
@@ -169,33 +169,36 @@ describe("backup", () => {
     expect(getDb().sessions.size).toBe(0);
   });
 
-  test("restore rejects a missing file, and confirm must be the exact literal", async () => {
+  test("restore picks a listed file, and confirm must be the exact literal", async () => {
     const { user } = await renderApp("/pengaturan", "admin");
     await user.click(await screen.findByRole("button", { name: "Backup" }));
     await user.click(screen.getByRole("button", { name: "Backup sekarang" }));
     const name = getDb().backups[0]!.name;
     const sessionsBefore = getDb().sessions.size;
 
-    // The password is checked before the file lookup, so a good password with an unknown file is a 404.
-    await user.type(screen.getByLabelText("File backup tujuan"), "tidak-ada.dump");
-    await user.type(screen.getByLabelText("Ketik RESTORE"), "RESTORE");
-    await user.type(screen.getByLabelText("Password kamu"), "demo1234");
-    await user.click(screen.getByRole("button", { name: "Pulihkan database" }));
-    expect((await screen.findByRole("alert")).textContent).toContain("File backup tidak ditemukan.");
-    expect(getDb().sessions.size).toBe(sessionsBefore);
+    // Spec 5.11: the file is picked from the list, so the only option besides the placeholder is
+    // the backup that was just made - there is no name to mistype, and no unlisted name to send.
+    const pick = screen.getByLabelText("File backup tujuan");
+    expect(within(pick).getAllByRole("option").map((o) => (o as HTMLOptionElement).value)).toEqual(["", name]);
 
-    // The button stays disabled until confirm matches the literal the schema requires,
-    // so a lowercase "restore" never reaches the endpoint at all.
-    await user.clear(screen.getByLabelText("File backup tujuan"));
-    await user.type(screen.getByLabelText("File backup tujuan"), name);
-    await user.clear(screen.getByLabelText("Ketik RESTORE"));
+    // The button stays disabled until a file is picked and confirm matches the literal the schema
+    // requires, so a lowercase "restore" never reaches the endpoint at all.
     await user.type(screen.getByLabelText("Ketik RESTORE"), "restore");
     expect(screen.getByRole("button", { name: "Pulihkan database" })).toHaveProperty("disabled", true);
+    await user.selectOptions(pick, name);
+    expect(screen.getByRole("button", { name: "Pulihkan database" })).toHaveProperty("disabled", true);
+    await user.clear(screen.getByLabelText("Ketik RESTORE"));
+    await user.type(screen.getByLabelText("Ketik RESTORE"), "RESTORE");
+    expect(screen.getByRole("button", { name: "Pulihkan database" })).toHaveProperty("disabled", false);
     expect(getDb().sessions.size).toBe(sessionsBefore);
 
     // The request body carries the literal the shared schema demands, and only that literal.
     expect(RestoreRequest.safeParse({ fileName: name, password: "demo1234", confirm: "RESTORE" }).success).toBe(true);
     expect(RestoreRequest.safeParse({ fileName: name, password: "demo1234", confirm: "restore" }).success).toBe(false);
+    // An unlisted name is what the API answers 404 on; the handler owns that branch now that the
+    // picker cannot produce one: packages/mock-api/test/handlers.test.ts.
+    await expect(api.post(ENDPOINTS.restore, RestoreResponse, { fileName: "tidak-ada.dump", password: "demo1234", confirm: "RESTORE" })).rejects.toThrow("File backup tidak ditemukan.");
+    expect(getDb().sessions.size).toBe(sessionsBefore);
   });
 
   test("the restore reply carries the pre-restore file, and the test endpoints answer as documented", async () => {
@@ -211,13 +214,14 @@ describe("backup", () => {
       await user.click(await screen.findByRole("button", { name: "Backup" }));
       await user.click(screen.getByRole("button", { name: "Backup sekarang" }));
       const name = getDb().backups[0]!.name;
-      await user.type(screen.getByLabelText("File backup tujuan"), name);
+      await user.selectOptions(screen.getByLabelText("File backup tujuan"), name);
       await user.type(screen.getByLabelText("Ketik RESTORE"), "RESTORE");
       await user.type(screen.getByLabelText("Password kamu"), "demo1234");
       await user.click(screen.getByRole("button", { name: "Pulihkan database" }));
       // The screen signs out on success, so wait for the Login screen: the restore has completed.
       expect(await screen.findByRole("button", { name: "Masuk" })).toBeTruthy();
-      // The status line the screen rendered was "Backup pra-pemulihan: <name>", and that name is a real file.
+      // The screen signs out on success and unmounts, so it renders no readable status line; the
+      // pre-restore name is verified from the reply itself, and it names a real backup file.
       expect(replies[0]).toMatch(/"preRestore":\{"name":"pre-restore-/);
       const shown = JSON.parse(replies[0]!).preRestore.name as string;
       expect(getDb().backups.some((b) => b.name === shown)).toBe(true);
