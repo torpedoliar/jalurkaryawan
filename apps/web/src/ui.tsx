@@ -147,3 +147,6 @@ export function downloadXlsx(rows: Record<string, unknown>[], fileName: string):
   utils.book_append_sheet(wb, utils.json_to_sheet(rows), "Data");
   saveBlob(new Blob([write(wb, { type: "array", bookType: "xlsx" })]), fileName);
 }
+
+/** Occupancy percentage, shared by the three report tables. */
+export const pct = (booked: number, capacity: number) => (capacity ? Math.round((booked / capacity) * 100) : 0);
