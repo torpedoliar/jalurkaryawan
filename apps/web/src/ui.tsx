@@ -3,10 +3,34 @@ import { ZodError, type ZodTypeAny } from "zod";
 import { jakartaDate, type BookingStatus, type DepartureStatus, type Direction } from "@bms/shared";
 import { ApiFailure, api } from "./api";
 
+const NUM: Record<string, string | undefined> = { string: "karakter", array: "elemen" };
+
+/**
+ * Zod's own copy is English. Codes whose message the schema author wrote in
+ * Indonesian (`custom`, and `too_small`/`too_big`/`invalid_string` carrying a
+ * custom message) pass through verbatim; only Zod-generated English is mapped.
+ */
+function zodMessage(i: ZodError["issues"][number]): string {
+  if (i.code === "custom" || (i.code !== "invalid_type" && "message" in i && i.message && !isEnglish(i.message))) return i.message;
+  const at = i.path.join(".") || "body";
+  switch (i.code) {
+    case "unrecognized_keys": return "Ada kolom yang tidak dikenali.";
+    case "invalid_type": return i.received === "undefined" ? `${at} wajib diisi.` : `${at}: format tidak sesuai.`;
+    case "invalid_string": return `${at}: format tidak sesuai.`;
+    case "too_small": return `${at}: minimal ${i.minimum} ${NUM[i.type] ?? ""}`.trimEnd() + ".";
+    case "too_big": return `${at}: maksimal ${i.maximum} ${NUM[i.type] ?? ""}`.trimEnd() + ".";
+    case "not_multiple_of": return `${at}: harus kelipatan ${i.multipleOf}.`;
+    default: return `${at}: ${i.message}`;
+  }
+}
+
+/** All of @bms/shared's own messages are Indonesian, so English prose is always Zod-generated. */
+const isEnglish = (m: string) => /must|invalid|expected|required|unrecognized|multiple|finite/i.test(m);
+
 export function errorText(e: unknown): string {
   if (e instanceof ApiFailure) return e.message;
-  if (e instanceof ZodError) return e.issues[0]?.message ?? "Data tidak valid.";
-  return "Terjadi kesalahan. Coba lagi.";
+  const i = e instanceof ZodError ? e.issues[0] : undefined;
+  return i ? zodMessage(i) : "Terjadi kesalahan. Coba lagi.";
 }
 
 /** Load on mount and whenever deps change; stale responses are dropped. */
