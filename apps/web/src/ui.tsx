@@ -19,7 +19,7 @@ export function useLoad<T>(fn: () => Promise<T>, deps: unknown[]) {
     setError(null);
     fn().then((d) => { if (live) setData(d); }, (e: unknown) => { if (live) setError(errorText(e)); });
     return () => { live = false; };
-  }, [...deps, tick]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [...deps, tick]);
   return { data, error, reload: useCallback(() => setTick((n) => n + 1), []) };
 }
 

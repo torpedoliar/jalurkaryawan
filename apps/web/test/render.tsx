@@ -9,6 +9,6 @@ import { App } from "../src/App";
 export async function renderApp(path: string, as?: string) {
   if (as) await login(as, DEMO_PASSWORD);
   const user = userEvent.setup();
-  render(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>);
+  render(<MemoryRouter initialEntries={[path]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}><App /></MemoryRouter>);
   return { user };
 }

@@ -9,6 +9,6 @@ async function start() {
     const [{ setupWorker }, { handlers }] = await Promise.all([import("msw/browser"), import("@bms/mock-api")]);
     await setupWorker(...handlers).start({ onUnhandledRequest: "bypass" });
   }
-  createRoot(document.getElementById("root")!).render(<StrictMode><BrowserRouter><App /></BrowserRouter></StrictMode>);
+  createRoot(document.getElementById("root")!).render(<StrictMode><BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}><App /></BrowserRouter></StrictMode>);
 }
 void start();
