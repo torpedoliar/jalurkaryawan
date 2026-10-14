@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, screen, within } from "@testing-library/react";
+import { read, utils as sheetUtils } from "xlsx";
 import { getDb } from "@bms/mock-api";
 import { renderApp } from "./render";
 
@@ -66,7 +67,8 @@ describe("trip harian", () => {
 
   test("passenger list and Excel export", async () => {
     const saved: string[] = [];
-    URL.createObjectURL = vi.fn(() => "blob:x");
+    const blobs: Blob[] = [];
+    URL.createObjectURL = vi.fn((b: Blob) => { blobs.push(b); return "blob:x"; });
     URL.revokeObjectURL = vi.fn();
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) { saved.push(this.download); });
 
@@ -79,5 +81,66 @@ describe("trip harian", () => {
     await user.click(screen.getByRole("button", { name: "Export Excel" }));
     expect(saved).toEqual(["penumpang-R1-2026-10-14-0520.xlsx"]);
     expect(URL.createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
+
+    // Read the actual bytes back: a file that opens as garbage would otherwise ship silently.
+    // jsdom 25 has no Blob.arrayBuffer(); FileReader is the path that works here (ui.tsx's fileBytes proves it).
+    const wb = await new Promise<ReturnType<typeof read>>((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(read(new Uint8Array(fr.result as ArrayBuffer)));
+      fr.onerror = () => reject(fr.error);
+      fr.readAsArrayBuffer(blobs[0]!);
+    });
+    expect(wb.SheetNames).toEqual(["Data"]);
+    const rows = sheetUtils.sheet_to_json<Record<string, unknown>>(wb.Sheets[wb.SheetNames[0]!]!);
+    // 8 booked seats on this trip (8/8); the header row is the sheet's first row, not a data row here.
+    expect(rows).toHaveLength(8);
+    expect(Object.keys(rows[0]!)).toEqual(["Jam", "Titik", "NIK", "Nama", "Departemen", "No HP"]);
+    // Derive the expected row from the trip's actual first non-cancelled booking, not a hard-coded seed name.
+    const db = getDb();
+    const trip = db.trips.find((t) => t.routeId === "r1" && t.date === "2026-10-14" && t.departureAt.endsWith("05:20:00+07:00"))!;
+    const booking = db.bookings.find((b) => b.tripId === trip.id && b.status !== "CANCELLED")!;
+    const passenger = db.users.find((u) => u.id === booking.userId)!;
+    const stop = db.stops.find((s) => s.id === booking.stopId)!;
+    const match = rows.find((r) => r.NIK === passenger.nik);
+    expect(match).toMatchObject({ Nama: passenger.name, Departemen: passenger.department, "No HP": passenger.phone, Titik: stop.name });
+  });
+
+  test("cancelling a trip closes its manifest", async () => {
+    const { user } = await renderApp("/trip", "ga");
+    await screen.findByRole("row", { name: R1_PAGI });
+    await user.click(within(row(R1_PAGI)).getByRole("button", { name: "Penumpang" }));
+    expect(await screen.findByText(/^Penumpang R1/)).toBeTruthy();
+
+    // A cancelled trip's manifest is stale, and its useLoad dep (trip.id) never changes to re-fetch.
+    await user.click(within(row(R1_PAGI)).getByRole("button", { name: "Batalkan" }));
+    await user.click(within(row(R1_PAGI)).getByRole("button", { name: "Ya, batalkan" }));
+    await screen.findByRole("row", { name: /^05:20 R1 Pagi Jemput .*Dibatalkan/ });
+    expect(screen.queryByText(/^Penumpang R1/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Export Excel" })).toBeNull();
+  });
+
+  test("changing the date closes the bus-change dialog", async () => {
+    const { user } = await renderApp("/trip", "ga");
+    await screen.findByRole("row", { name: R1_PAGI });
+    await user.click(within(row(R1_PAGI)).getByRole("button", { name: "Ganti bus" }));
+    expect(screen.getByLabelText("Bus baru")).toBeTruthy();
+
+    // The dialog belongs to a trip on the previous date; the table would show the new one.
+    fireEvent.change(screen.getByLabelText("Tanggal"), { target: { value: "2026-10-15" } });
+    await screen.findByRole("row", { name: R1_PAGI });
+    expect(screen.queryByLabelText("Bus baru")).toBeNull();
+  });
+
+  test("a departed trip offers no change or cancel", async () => {
+    // No seed trip is departed (clock is midnight WIB, every trip still future). Move the clock past the
+    // 05:20 departures instead of editing a trip, so the row (and its date) stays intact.
+    vi.setSystemTime(new Date("2026-10-14T06:00:00+07:00"));
+    await renderApp("/trip", "ga");
+    await screen.findByRole("row", { name: R1_PAGI });
+    expect(within(row(R1_PAGI)).queryByRole("button", { name: "Ganti bus" })).toBeNull();
+    expect(within(row(R1_PAGI)).queryByRole("button", { name: "Batalkan" })).toBeNull();
+    // The manifest stays reachable: reading a departed trip's passengers is legitimate.
+    expect(within(row(R1_PAGI)).getByRole("button", { name: "Penumpang" })).toBeTruthy();
+    vi.setSystemTime(new Date("2026-10-14T00:00:00+07:00"));
   });
 });

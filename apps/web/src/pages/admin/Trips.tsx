@@ -53,7 +53,8 @@ export function Trips() {
   const shiftName = (t: Trip) => shifts.find((s) => s.id === t.shiftId)?.name ?? t.shiftId;
   const plate = (t: Trip) => buses.find((b) => b.id === t.busId)?.plate ?? t.busId;
   const label = (t: Trip) => `${code(t)} ${shiftName(t)} ${DIRECTION_LABEL[t.direction]} ${hhmm(t.departureAt)}`;
-  const reset = () => { setChange(undefined); setConfirm(""); trips.reload(); };
+  // A mutation invalidates the manifest and the open dialog alike: they belong to the row before it changed.
+  const reset = () => { setChange(undefined); setConfirm(""); setOpen(undefined); trips.reload(); };
 
   async function saveBus() {
     if (change && await run(() => api.put(ENDPOINTS.tripBus(change.tripId), Trip, { busId: change.busId }))) reset();
@@ -72,7 +73,7 @@ export function Trips() {
       <ErrorText error={error ?? trips.error ?? lookups.error} />
       {done && <p role="status">{done}</p>}
       <div className="card row">
-        <label>Tanggal<input type="date" value={date} onChange={(e) => { setDate(e.target.value); setOpen(undefined); setDone(""); }} /></label>
+        <label>Tanggal<input type="date" value={date} onChange={(e) => { setDate(e.target.value); setOpen(undefined); setChange(undefined); setConfirm(""); setDone(""); }} /></label>
         <label>Rute
           <select value={routeId} onChange={(e) => setRouteId(e.target.value)}>
             <option value="">Semua</option>
@@ -115,7 +116,8 @@ export function Trips() {
               <td>{t.status === "CANCELLED" ? "Dibatalkan" : "Terjadwal"}</td>
               <td>
                 <button onClick={() => setOpen(t)}>Penumpang</button>
-                {t.status === "SCHEDULED" && (
+                {/* The server also rejects a departed trip; hiding the affordance beats a verbatim rejection on a row nobody can still act on. */}
+                {t.status === "SCHEDULED" && Date.now() < Date.parse(t.departureAt) && (
                   <>
                     <button onClick={() => setChange({ tripId: t.id, busId: t.busId })}>Ganti bus</button>
                     {confirm === t.id
