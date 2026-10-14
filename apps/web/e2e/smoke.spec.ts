@@ -1,0 +1,42 @@
+import { expect, test } from "@playwright/test";
+
+const NIK = "K1001";
+const PASSWORD = "demo1234";
+const DATE = "2026-10-15";
+
+test("login, daily booking, then cancel", async ({ page }) => {
+  // 1. Login
+  await page.goto("/");
+  await page.getByLabel("NIK").fill(NIK);
+  await page.getByLabel("Password").fill(PASSWORD);
+  await page.getByRole("button", { name: "Masuk" }).click();
+
+  // A role's first visible page is its landing page (pages.tsx), so a successful login lands on Beranda.
+  await expect(page.getByRole("heading", { name: "Beranda" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Pengaturan" })).toHaveCount(0);
+
+  // 2. Daily booking
+  await page.getByRole("link", { name: "Booking Harian" }).click();
+  await expect(page.getByRole("heading", { name: "Booking Harian" })).toBeVisible();
+  await page.getByLabel("Tanggal").selectOption(DATE);
+  // Shift's option label carries a time suffix (`Siang (15:00-23:00)`), and selectOption's label match is whole-string, so select by id.
+  await page.getByLabel("Shift").selectOption("siang");
+  await page.getByLabel("Arah").selectOption({ label: "Jemput" });
+  await page.getByLabel("Rute").selectOption({ label: "R2 Bekasi Timur" });
+  // Titik jemput only appears once a route is chosen.
+  await page.getByLabel("Titik jemput").selectOption({ label: "1. Halte Bulak Kapal" });
+
+  await expect(page.getByText(/Sisa kursi: \d+ dari 50/)).toBeVisible();
+  await page.getByRole("button", { name: "Pesan" }).click();
+  // The success line renders booked.routeCode, which is "R2", not the route name.
+  await expect(page.getByText(/^Booking berhasil: R2 Halte Bulak Kapal,/)).toBeVisible();
+
+  // 3. The new booking is on Beranda, and cancelling flips its status
+  await page.getByRole("link", { name: "Beranda" }).click();
+  const card = page.locator("article").filter({ hasText: `${DATE} · Jemput · R2 Bekasi Timur` });
+  await expect(card).toHaveCount(1);
+  await expect(card.getByText("Terbooked")).toBeVisible();
+  await card.getByRole("button", { name: "Batalkan" }).click();
+  await expect(card.getByText("Dibatalkan")).toBeVisible();
+  await expect(card.getByRole("button", { name: "Batalkan" })).toHaveCount(0);
+});
