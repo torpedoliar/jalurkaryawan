@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 import { screen, within } from "@testing-library/react";
-import { addDays } from "@bms/shared";
-import { getDb } from "@bms/mock-api";
+import { addDays, ERROR_MESSAGES } from "@bms/shared";
+import { getDb, resetDb } from "@bms/mock-api";
 import { renderApp } from "./render";
 
 const TODAY = "2026-10-14";
@@ -83,6 +83,36 @@ describe("employee", () => {
     expect(await within(row).findByText("Berakhir")).toBeTruthy();
   });
 
+  // Review Focus: spec 5.4 wants the server's TRIP_FULL/CUTOFF_PASSED message to surface, not a dead button.
+  test("a full trip reports TRIP_FULL verbatim (submit stays enabled)", async () => {
+    // K1061 books siang/r1, so it has no pagi/r1 booking tomorrow; r1 pagi pickup is 8/8 full after seeding.
+    const { user } = await renderApp("/booking", "K1061");
+    await user.selectOptions(await screen.findByLabelText("Tanggal"), TOMORROW);
+    await user.selectOptions(screen.getByLabelText("Shift"), "pagi");
+    await user.selectOptions(screen.getByLabelText("Arah"), "PICKUP");
+    await user.selectOptions(screen.getByLabelText("Rute"), "r1");
+    await user.selectOptions(await screen.findByLabelText("Titik jemput"), "r1s1");
+    await user.click(screen.getByRole("button", { name: "Pesan" }));
+    expect((await screen.findByRole("alert")).textContent).toBe(ERROR_MESSAGES.TRIP_FULL);
+    expect((screen.getByRole("button", { name: "Pesan" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  test("a past-cutoff trip reports CUTOFF_PASSED verbatim", async () => {
+    // Server clock at 03:30 today: today's r2 pagi pickup (departs 05:25) is past its 03:25 cutoff but not full (10/50).
+    // resetDb is the only way to move the server clock; the client clock follows via setSystemTime.
+    const at = () => new Date(`${TODAY}T03:30:00+07:00`);
+    resetDb(at);
+    vi.setSystemTime(at());
+    const { user } = await renderApp("/booking", "K1061"); // K1061 books siang/r1, so no pagi/r2 booking today
+    await user.selectOptions(await screen.findByLabelText("Tanggal"), TODAY);
+    await user.selectOptions(screen.getByLabelText("Shift"), "pagi");
+    await user.selectOptions(screen.getByLabelText("Arah"), "PICKUP");
+    await user.selectOptions(screen.getByLabelText("Rute"), "r2");
+    await user.selectOptions(await screen.findByLabelText("Titik jemput"), "r2s1");
+    await user.click(screen.getByRole("button", { name: "Pesan" }));
+    expect((await screen.findByRole("alert")).textContent).toBe(ERROR_MESSAGES.CUTOFF_PASSED);
+  });
+
   test("history lists bookings newest first; notifications mark as read", async () => {
     const db = getDb();
     const u = db.users.find((x) => x.nik === "K1001")!;
@@ -95,5 +125,25 @@ describe("employee", () => {
     await user.click(await screen.findByRole("button", { name: "Tandai dibaca" }));
     expect(await screen.findByText("Dibaca")).toBeTruthy();
     expect(db.notifications.find((n) => n.id === "n-test")!.readAt).not.toBeNull();
+  });
+
+  test("empty states on the employee screens", async () => {
+    // A fresh employee with no bookings, subscriptions or notifications renders each screen's empty line, not a blank grid.
+    const db = getDb();
+    const u = db.users.find((x) => x.nik === "K1001")!;
+    db.bookings.length = 0;
+    db.subscriptions.length = 0;
+    db.notifications.length = 0;
+    const { user } = await renderApp("/beranda", "K1001");
+    expect(await screen.findByText("Belum ada booking 7 hari ke depan.")).toBeTruthy();
+
+    await user.click(screen.getByRole("link", { name: "Langganan" }));
+    expect(await screen.findByText("Belum ada langganan.")).toBeTruthy();
+
+    await user.click(screen.getByRole("link", { name: "Riwayat" }));
+    expect(await screen.findByText("Belum ada riwayat booking.")).toBeTruthy();
+
+    await user.click(screen.getByRole("link", { name: "Notifikasi" }));
+    expect(await screen.findByText("Belum ada notifikasi.")).toBeTruthy();
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { screen, within } from "@testing-library/react";
+import { cleanup, screen, within } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { DEMO_PASSWORD, getDb } from "@bms/mock-api";
 import { ENDPOINTS } from "@bms/shared";
@@ -94,5 +94,26 @@ describe("app shell", () => {
     expect(mine.length).toBeGreaterThan(0);
     for (const r of mine) expect(within(r).getByText(/R1/)).toBeTruthy();
     expect(screen.getAllByText("TERSEDIA").length).toBeGreaterThan(0);
+  });
+
+  // Review Focus 3: each seed role's nav and landing page equals the spec §6.1-6.3 role table.
+  test("each role's nav links and landing page match the spec", async () => {
+    const expected: Record<string, string[]> = {
+      // 6.2 Karyawan: Beranda/Booking/Langganan/Riwayat/Notifikasi (+ shared Papan & Ganti Password). Landing = first = Beranda.
+      "K1001": ["Beranda", "Booking Harian", "Langganan", "Riwayat", "Notifikasi", "Papan Keberangkatan", "Ganti Password"],
+      // 6.1 Admin: the admin screens + shared, no employee screens, no Pengaturan (SUPER only). Landing = Vendor & Bus.
+      ga: ["Vendor & Bus", "Rute & Titik", "Shift & Jadwal", "Trip Harian", "Karyawan", "Admin & Vendor", "Dashboard", "Laporan", "Audit Log", "Papan Keberangkatan", "Ganti Password"],
+      // 6.1 Admin: everything ADMIN_GA sees plus Pengaturan. Landing = Vendor & Bus.
+      admin: ["Vendor & Bus", "Rute & Titik", "Shift & Jadwal", "Trip Harian", "Karyawan", "Admin & Vendor", "Dashboard", "Laporan", "Audit Log", "Pengaturan", "Papan Keberangkatan", "Ganti Password"],
+      // 6.3 Vendor: read-only dashboard + shared. Landing = Dashboard Vendor.
+      vendor: ["Dashboard Vendor", "Papan Keberangkatan", "Ganti Password"],
+    };
+    for (const [nik, labels] of Object.entries(expected)) {
+      cleanup(); // each renderApp mounts a fresh App; drop the previous role's nav before asserting the next
+      await renderApp("/", nik);
+      const nav = await screen.findByRole("navigation");
+      const links = within(nav).getAllByRole("link").map((a) => a.textContent);
+      expect(links).toEqual(labels);
+    }
   });
 });
