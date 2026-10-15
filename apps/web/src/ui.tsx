@@ -118,13 +118,15 @@ export function fileBytes(file: File): Promise<ArrayBuffer> {
 export async function readXlsx(file: File): Promise<unknown[]> {
   let wb;
   try {
-    wb = read(await fileBytes(file));
+    // raw: true keeps a numeric-looking CSV cell ("00123", "0812…") a string; without it SheetJS
+    // coerces it to a number and the leading zero is gone before the header mapping runs.
+    wb = read(await fileBytes(file), { raw: true });
   } catch {
     // SheetJS reads arbitrary bytes as an empty workbook, so a corrupt file would otherwise look like a valid file with no rows.
-    throw new Error(`File ${file.name} bukan format Excel atau CSV yang bisa dibaca.`);
+    throw new ApiFailure("VALIDATION_ERROR", `File ${file.name} bukan format Excel atau CSV yang bisa dibaca.`, 0);
   }
   const first = wb.SheetNames[0];
-  if (!first) throw new Error("File tidak berisi sheet.");
+  if (!first) throw new ApiFailure("VALIDATION_ERROR", "File tidak berisi sheet.", 0);
   const rows = utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[first]!, { defval: "" });
   return rows.map((r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [IMPORT_HEADERS[k.trim().toLowerCase()] ?? k, v])));
 }

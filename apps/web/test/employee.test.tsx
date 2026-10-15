@@ -63,7 +63,7 @@ describe("employee", () => {
     expect((screen.getByRole("button", { name: "Pesan" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  test("subscriptions: create reports booked dates, overlap error verbatim, end", async () => {
+  test("ending a subscription needs a confirmation", async () => {
     const { user } = await renderApp("/langganan", "K1001");
     await user.selectOptions(await screen.findByLabelText("Shift"), "siang");
     await user.selectOptions(screen.getByLabelText("Arah"), "DROPOFF");
@@ -76,7 +76,10 @@ describe("employee", () => {
     expect((await screen.findByRole("alert")).textContent).toBe("Langganan bentrok dengan langganan lain di shift dan arah yang sama.");
 
     const row = (await screen.findAllByRole("row")).find((r) => within(r).queryByText(/R3/))!;
+    // Ending a subscription is irreversible and cancels every future booking in it, so it arms first.
     await user.click(within(row).getByRole("button", { name: "Akhiri" }));
+    expect(within(row).queryByText("Berakhir")).toBeNull();
+    await user.click(within(row).getByRole("button", { name: "Ya, akhiri" }));
     expect(await within(row).findByText("Berakhir")).toBeTruthy();
   });
 

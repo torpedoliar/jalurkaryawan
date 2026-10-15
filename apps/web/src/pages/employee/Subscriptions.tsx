@@ -14,6 +14,7 @@ export function Subscriptions() {
   const [endDate, setEnd] = useState("");
   const [weekdays, setWeekdays] = useState([1, 2, 3, 4, 5, 6, 7]);
   const [result, setResult] = useState<SubscriptionCreateResponse | null>(null);
+  const [endId, setEndId] = useState("");
   const { busy, error, run } = useAction();
   const routeCode = (id: string) => lookups.data?.[0].find((r) => r.id === id)?.code ?? id;
   const shiftName = (id: string) => lookups.data?.[1].find((s) => s.id === id)?.name ?? id;
@@ -26,7 +27,7 @@ export function Subscriptions() {
     if (r) { setResult(r); list.reload(); }
   }
   async function end(id: string) {
-    if (await run(() => api.post(ENDPOINTS.subscriptionEnd(id), Subscription))) list.reload();
+    if (await run(() => api.post(ENDPOINTS.subscriptionEnd(id), Subscription))) { setEndId(""); list.reload(); }
   }
   return (
     <>
@@ -63,7 +64,9 @@ export function Subscriptions() {
                   <td>{s.startDate} s/d {s.endDate ?? "seterusnya"}</td>
                   <td>{dayNames(s.weekdays)}</td>
                   <td>{s.status === "ACTIVE" ? "Aktif" : "Berakhir"}</td>
-                  <td>{s.status === "ACTIVE" && <button disabled={busy} onClick={() => void end(s.id)}>Akhiri</button>}</td>
+                  <td>{s.status === "ACTIVE" && (endId === s.id
+                    ? <button disabled={busy} onClick={() => void end(s.id)}>Ya, akhiri</button>
+                    : <button onClick={() => setEndId(s.id)}>Akhiri</button>)}</td>
                 </tr>
               ))}
             </tbody>

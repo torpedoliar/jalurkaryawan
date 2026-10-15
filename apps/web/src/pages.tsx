@@ -39,7 +39,8 @@ export const PAGES: Page[] = [
   { path: "/shift-jadwal", label: "Shift & Jadwal", roles: ADM, element: <ShiftsTemplates /> },
   { path: "/trip", label: "Trip Harian", roles: ADM, element: <Trips /> },
   { path: "/karyawan", label: "Karyawan", roles: ADM, element: <Employees /> },
-  { path: "/admin-user", label: "Admin & Vendor", roles: SUPER, element: <Admins /> },
+  /** Spec 6.1: vendor accounts are ADMIN_GA work; only admin accounts are Super-Admin-only. */
+  { path: "/admin-user", label: "Admin & Vendor", roles: ADM, element: <Admins /> },
   { path: "/dashboard", label: "Dashboard", roles: ADM, element: <Dashboard /> },
   { path: "/laporan", label: "Laporan", roles: ADM, element: <Reports /> },
   { path: "/audit", label: "Audit Log", roles: ADM, element: <Audit /> },

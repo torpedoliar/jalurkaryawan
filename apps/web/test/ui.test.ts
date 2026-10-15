@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vitest";
+import { write } from "xlsx";
 import { BusInput, SubscriptionInput, TripTemplateInput, UserInput, VendorInput } from "@bms/shared";
-import { errorText, pct } from "../src/ui";
+import { ApiFailure } from "../src/api";
+import { errorText, pct, readXlsx } from "../src/ui";
 
 describe("errorText", () => {
   test("ApiFailure keeps the server message verbatim", async () => {
@@ -49,6 +51,18 @@ describe("errorText", () => {
 
   test("unknown errors fall back to the generic Indonesian line", () => {
     expect(errorText(new Error("boom"))).toBe("Terjadi kesalahan. Coba lagi.");
+  });
+});
+
+describe("readXlsx", () => {
+  test("readXlsx surfaces its own message for a truncated xlsx", async () => {
+    // A truncated archive is what makes SheetJS throw "Unsupported ZIP file"; ApiFailure is what
+    // lets errorText() show the Indonesian line instead of the generic one.
+    const whole = new Uint8Array(write({ SheetNames: ["Data"], Sheets: { Data: {} } }, { type: "array", bookType: "xlsx" }) as number[]);
+    const err = await readXlsx(new File([whole.subarray(0, 200)], "truncated.xlsx")).then(() => undefined).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiFailure);
+    expect(err).toMatchObject({ code: "VALIDATION_ERROR", message: "File truncated.xlsx bukan format Excel atau CSV yang bisa dibaca." });
+    expect(errorText(err)).toBe("File truncated.xlsx bukan format Excel atau CSV yang bisa dibaca.");
   });
 });
 

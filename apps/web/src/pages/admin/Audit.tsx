@@ -74,7 +74,7 @@ export function Audit() {
             <tr key={a.id}>
               <td>{a.createdAt.slice(0, 16).replace("T", " ")}</td>
               <td>{a.actorName}</td>
-              <td>{a.action}</td>
+              <td>{ACTION_LABEL[a.action] ?? a.action}</td>
               <td>{a.entity}</td>
               <td>{a.entityId}</td>
               <td>{JSON.stringify(a.before)}</td>

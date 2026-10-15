@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, screen, within } from "@testing-library/react";
+import { http, HttpResponse } from "msw";
 import { getDb } from "@bms/mock-api";
 import { BackupFile, ENDPOINTS, RestoreRequest } from "@bms/shared";
 import { z } from "zod";
 import { api } from "../src/api";
+import { server } from "./setup";
 import { renderApp } from "./render";
 
 /** jsdom has no createObjectURL and no navigation on <a>.click(); record the file name instead. */
@@ -85,6 +87,26 @@ describe("pengaturan", () => {
     expect((await screen.findByRole("status")).textContent).toContain("Notifikasi uji terkirim ke perangkat kamu.");
   });
 
+  test("the FCM service account shows its stored status", async () => {
+    const { user } = await renderApp("/pengaturan", "admin");
+    await user.click(await screen.findByRole("button", { name: "Notifikasi" }));
+    const fcm = (await screen.findByLabelText("Service account FCM (JSON)")).closest("section")!;
+    // Spec 5.12: a secret reports stored-or-not only. The seed leaves it empty, so it reads unset.
+    expect(getDb().settings.fcm_service_account).toBe("");
+    expect(fcm.textContent).toContain("Status: Belum diisi");
+
+    await user.upload(await screen.findByLabelText("Service account FCM (JSON)"), new File([FCM], "fcm.json"));
+    await user.click(screen.getByRole("button", { name: "Simpan pengaturan" }));
+    expect((await screen.findByRole("status")).textContent).toContain("Pengaturan disimpan.");
+    // A fresh render reads the server's view: isSet true, the JSON itself never in the DOM.
+    cleanup();
+    await renderApp("/pengaturan", "admin");
+    await user.click(await screen.findByRole("button", { name: "Notifikasi" }));
+    const reloaded = (await screen.findByLabelText("Service account FCM (JSON)")).closest("section")!;
+    expect(reloaded.textContent).toContain("Status: Tersimpan");
+    expect(reloaded.textContent).not.toContain("service_account");
+  });
+
   test("test share reports the returned message", async () => {
     const { user } = await renderApp("/pengaturan", "admin");
     await user.click(await screen.findByRole("button", { name: "Backup" }));
@@ -143,6 +165,21 @@ describe("backup", () => {
     await expect(api.upload(ENDPOINTS.backupUpload, BackupFile, new FormData())).rejects.toThrow("File backup wajib diunggah.");
     await expect(post(dumpFile("catatan.sql"))).rejects.toThrow("File backup wajib diunggah.");
     expect(getDb().backups).toHaveLength(0);
+  });
+
+  test("a failed backup download reports to the alert", async () => {
+    const { user } = await renderApp("/pengaturan", "admin");
+    await user.click(await screen.findByRole("button", { name: "Backup" }));
+    await user.click(screen.getByRole("button", { name: "Backup sekarang" }));
+    const row = await screen.findByRole("row", { name: /bms-20261014-000000\.dump/ });
+    const name = getDb().backups[0]!.name;
+
+    // A file the retention job removed answers 404. Before the fix this rejection had no handler
+    // and the click did nothing visible; now it lands on the screen's single alert surface.
+    server.use(http.get(`*${ENDPOINTS.backupDownload(name)}`, () =>
+      HttpResponse.json({ code: "VALIDATION_ERROR", message: "File backup tidak ditemukan." }, { status: 404 })));
+    await user.click(within(row).getByRole("button", { name: "Unduh" }));
+    expect((await screen.findByRole("alert")).textContent).toBe("File backup tidak ditemukan.");
   });
 
   test("restore needs the right password and ends the session", async () => {

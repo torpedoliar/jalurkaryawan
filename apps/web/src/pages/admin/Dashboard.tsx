@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ENDPOINTS, DashboardSummary } from "@bms/shared";
+import { addDays, ENDPOINTS, DashboardSummary } from "@bms/shared";
 import { api } from "../../api";
 import { ErrorText, pct, today, useLoad } from "../../ui";
 
@@ -25,8 +25,9 @@ export function Dashboard() {
               <tr><th>Trip</th><td>{d.trips}</td></tr>
               <tr><th>Terisi</th><td>{d.booked}/{d.capacity} ({pct(d.booked, d.capacity)}%)</td></tr>
               <tr><th>Trip penuh</th><td>{d.fullTrips}</td></tr>
-              <tr><th>Booking ditolak hari ini</th><td>{d.rejectedToday}</td></tr>
-              <tr><th>Booking ditolak kemarin</th><td>{d.rejectedYesterday}</td></tr>
+              {/* Both counts are relative to the requested date, so the label names that date, not "today". */}
+              <tr><th>Booking ditolak {d.date}</th><td>{d.rejectedToday}</td></tr>
+              <tr><th>Booking ditolak {addDays(d.date, -1)}</th><td>{d.rejectedYesterday}</td></tr>
             </tbody>
           </table>
           <table className="card">

@@ -168,9 +168,13 @@ export function SettingsScreen() {
               </>
             )}
             {tab === "notification" && (
-              <div className="row">
+              <>
+                {/* Spec 5.12: a secret shows stored-or-not, like the share password below. The value itself is never rendered. */}
+                <p>Status: {load.data.fcm_service_account.isSet ? "Tersimpan" : "Belum diisi"}</p>
+                <div className="row">
                 <button type="button" disabled={act.busy} onClick={async () => setMsg((await act.run(() => api.post(ENDPOINTS.settingsTestPush, TestResult)))?.message ?? "")}>Tes kirim push</button>
-              </div>
+                </div>
+              </>
             )}
           </section>
 
@@ -196,7 +200,7 @@ export function SettingsScreen() {
                     <tr key={b.name}>
                       <td>{b.name}</td><td>{mb(b.sizeBytes)}</td><td>{b.createdAt}</td>
                       <td>{b.copiedToShare ? "Tersalin" : "Belum"}</td>
-                      <td><button type="button" onClick={() => void api.download(ENDPOINTS.backupDownload(b.name), b.name)}>Unduh</button></td>
+                      <td><button type="button" onClick={() => void act.run(() => api.download(ENDPOINTS.backupDownload(b.name), b.name))}>Unduh</button></td>
                     </tr>
                   ))}
                 </tbody>

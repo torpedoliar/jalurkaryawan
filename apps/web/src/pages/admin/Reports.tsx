@@ -80,7 +80,7 @@ const EmployeeHistory = () => {
   const [term, setTerm] = useState("");
   const [userId, setUserId] = useState("");
   const matches = useLoad(
-    () => (term.trim() ? api.get(ENDPOINTS.users, Paginated(UserSummary), { q: term.trim() }) : Promise.resolve(undefined)),
+    () => (term.trim() ? api.get(ENDPOINTS.users, Paginated(UserSummary), { q: term.trim(), role: "EMPLOYEE" }) : Promise.resolve(undefined)),
     [term],
   );
   const list = useLoad(

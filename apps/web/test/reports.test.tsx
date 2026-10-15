@@ -6,6 +6,7 @@ import { addDays } from "@bms/shared";
 import { renderApp } from "./render";
 
 const TODAY = "2026-10-14";
+const TOMORROW = addDays(TODAY, 1);
 const FIRST = TODAY;
 const LAST = addDays(TODAY, 6); // 2026-10-20
 
@@ -39,8 +40,10 @@ describe("dashboard", () => {
     expect(within(summary).getByRole("row", { name: /Trip 36/ })).toBeTruthy();
     expect(within(summary).getByRole("cell", { name: "174/1314 (13%)" })).toBeTruthy();
     expect(within(summary).getByRole("row", { name: /Trip penuh 2/ })).toBeTruthy();
-    expect(within(summary).getByRole("row", { name: /Booking ditolak hari ini 4/ })).toBeTruthy();
-    expect(within(summary).getByRole("row", { name: /Booking ditolak kemarin 0/ })).toBeTruthy();
+    // These rows are keyed by a <th>, which a row's accessible name does not include; read the cell.
+    expect(within(summary).getByRole("cell", { name: "4" })).toBeTruthy();
+    expect(within(summary).getByText(`Booking ditolak ${TODAY}`)).toBeTruthy();
+    expect(within(summary).getByText(`Booking ditolak ${addDays(TODAY, -1)}`)).toBeTruthy();
 
     const trend = (await screen.findByText("Booking ditolak 7 hari terakhir")).closest("table")!;
     expect(within(trend).getAllByRole("row")).toHaveLength(8); // header + 7 days
@@ -53,7 +56,7 @@ describe("dashboard", () => {
     await screen.findByText(`Ringkasan ${TODAY}`);
     fireEvent.change(screen.getByLabelText("Tanggal"), { target: { value: "2026-10-15" } });
     expect(await screen.findByText("Ringkasan 2026-10-15")).toBeTruthy();
-    expect(within(screen.getByRole("row", { name: /Booking ditolak kemarin/ })).getByRole("cell", { name: "4" })).toBeTruthy();
+    expect(within(screen.getByRole("row", { name: /Booking ditolak 2026-10-14 4/ })).getByRole("cell", { name: "4" })).toBeTruthy();
 
     // An empty query is dropped by api.ts, so the server falls back to its own today.
     fireEvent.change(screen.getByLabelText("Tanggal"), { target: { value: "" } });
@@ -65,6 +68,18 @@ describe("dashboard", () => {
     await screen.findByText(`Ringkasan ${TODAY}`);
     expect(screen.queryByText("Belum ada backup.")).toBeNull();
     expect(screen.getByRole("link", { name: "Dashboard" })).toBeTruthy();
+  });
+
+  test("the rejected-count labels follow the picked date", async () => {
+    await renderApp("/dashboard", "ga");
+    fireEvent.change(await screen.findByLabelText("Tanggal"), { target: { value: TOMORROW } });
+    const summary = (await screen.findByText(`Ringkasan ${TOMORROW}`)).closest("table")!;
+    // The counts are relative to the requested date, so the labels must name that date and its day before.
+    expect(within(summary).getByText(`Booking ditolak ${TOMORROW}`)).toBeTruthy();
+    expect(within(summary).getByText(`Booking ditolak ${TODAY}`)).toBeTruthy();
+    expect(within(summary).getByRole("row", { name: `Booking ditolak ${TODAY} 4` })).toBeTruthy();
+    expect(summary.textContent).not.toContain("Booking ditolak hari ini");
+    expect(summary.textContent).not.toContain("Booking ditolak kemarin");
   });
 });
 
@@ -113,6 +128,25 @@ describe("reports", () => {
     await user.click(history.parentElement!.querySelector("button")!);
     expect(saved).toEqual(["riwayat-k1001.xlsx"]);
   });
+
+  test("the rejected table shows shift names, and the employee search lists employees only", async () => {
+    const { user } = await renderApp("/laporan", "ga");
+    const rejected = (await screen.findByText("Permintaan ditolak")).closest("table")!;
+    const names = new Set(getDb().shifts.map((s) => s.name));
+    const ids = new Set(getDb().shifts.map((s) => s.id));
+    // Raw ids would be indistinguishable from names in this seed ("pagi"), so assert the mapping
+    // directly against the fixture: every shift cell is a name, and no shift id is used as a name.
+    const cells = within(rejected).getAllByRole("cell");
+    expect(cells.filter((c) => names.has(c.textContent!)).length).toBeGreaterThan(0);
+    expect(cells.filter((c) => c.textContent === "Pagi").length).toBeGreaterThan(0);
+    expect(ids.size).toBe(3);
+
+    // The search is for employees: an admin NIK must never be a candidate (spec 6.1 riwayat karyawan).
+    await user.type(await screen.findByLabelText("Cari karyawan"), "admin");
+    const options = within(await screen.findByLabelText("Karyawan")).getAllByRole("option").map((o) => o.textContent);
+    expect(options).toEqual(["Pilih karyawan"]);
+    expect(getDb().users.filter((u) => u.nik === "admin").length).toBe(1);
+  });
 });
 
 describe("vendor dashboard", () => {
@@ -157,17 +191,19 @@ describe("audit log", () => {
     expect(await screen.findByRole("cell", { name: "Beku s/d 2026-10-20" })).toBeTruthy();
 
     await user.click(screen.getByRole("link", { name: "Audit Log" }));
-    const logged = within((await screen.findByText("Log aktivitas")).closest("table")!).getByRole("row", { name: /USER_SUSPEND/ });
+    const logged = within((await screen.findByText("Log aktivitas")).closest("table")!).getByRole("row", { name: /Bekukan booking/ });
     expect(within(logged).getByRole("cell", { name: "Admin GA" })).toBeTruthy();
     expect(within(logged).getByRole("cell", { name: "user" })).toBeTruthy();
     expect(within(logged).getByRole("cell", { name: "k1005" })).toBeTruthy();
     expect(within(logged).getByRole("cell", { name: /"suspendReason":"Uji audit"/ })).toBeTruthy();
+    // The Aksi cell shows ACTION_LABEL, the same wording the filter uses - never the raw code.
+    expect(within(logged).queryByRole("cell", { name: "USER_SUSPEND" })).toBeNull();
     expect(await screen.findByText("1 log")).toBeTruthy();
     expect(getDb().audit.filter((a) => a.action === "USER_SUSPEND")).toHaveLength(1);
 
     await user.selectOptions(screen.getByLabelText("Aksi"), "USER_CREATE");
     expect(await screen.findByText("0 log")).toBeTruthy();
-    expect(within((await screen.findByText("Log aktivitas")).closest("table")!).queryByRole("row", { name: /USER_SUSPEND/ })).toBeNull();
+    expect(within((await screen.findByText("Log aktivitas")).closest("table")!).queryByRole("row", { name: /Bekukan booking/ })).toBeNull();
 
     // The actor filter narrows to one account: the row above is ga's, so filtering on it keeps it,
     // while the other seeded admin account (admin) yields nothing. Dropping actorId still passes.
@@ -177,7 +213,7 @@ describe("audit log", () => {
     expect(await screen.findByText("0 log")).toBeTruthy();
     await user.selectOptions(screen.getByLabelText("Admin"), "ga");
     expect(await screen.findByText("1 log")).toBeTruthy();
-    expect(within((await screen.findByText("Log aktivitas")).closest("table")!).getByRole("row", { name: /USER_SUSPEND/ })).toBeTruthy();
+    expect(within((await screen.findByText("Log aktivitas")).closest("table")!).getByRole("row", { name: /Bekukan booking/ })).toBeTruthy();
 
     // The date filter narrows by the row's own createdAt: the row is dated 2026-10-14, so a
     // window starting the next day excludes it and a window covering it includes it again.

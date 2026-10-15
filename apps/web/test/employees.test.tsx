@@ -41,12 +41,14 @@ describe("employees", () => {
     // Reset an unrelated employee: the two imported passwords must survive (the endpoint serves them only once).
     const row = (await screen.findByRole("cell", { name: "Budi Santoso" })).closest("tr")!;
     await user.click(within(row).getByRole("button", { name: "Reset password" }));
+    await user.click(within(row).getByRole("button", { name: "Ya, reset password" }));
     expect(within(table()).getByRole("cell", { name: "K1002" })).toBeTruthy();
     expect(within(table()).getByRole("cell", { name: "K2001" })).toBeTruthy();
     expect(within(table()).getByRole("cell", { name: "K2002" })).toBeTruthy();
 
     // Re-resetting the same user supersedes his row instead of adding a second one.
     await user.click(within(row).getByRole("button", { name: "Reset password" }));
+    await user.click(within(row).getByRole("button", { name: "Ya, reset password" }));
     expect(within(table()).getAllByRole("cell", { name: "K1002" }).length).toBe(1);
     expect(within(table()).getAllByRole("cell", { name: "K2001" }).length).toBe(1);
   });
@@ -72,13 +74,24 @@ describe("employees", () => {
 
   test("lowercase CSV headers import", async () => {
     const { user } = await renderApp("/karyawan", "ga");
-    // SheetJS coerces a numeric-looking cell, so a phone with a leading 0 loses it in any format (xlsx included); the header mapping is what this covers.
     const csv = new File([new TextEncoder().encode("nik,nama,departemen,no hp\nK2003,Baru Tiga,QC,0812 ext 5\n")], "karyawan.csv");
     await user.upload(await screen.findByLabelText("File Excel"), csv);
     expect(await screen.findByText("Baru: 1 · Diperbarui: 0 · Error: 0")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Simpan import" }));
     expect(within(screen.getByText(/Password sementara/).closest("table")!).getByRole("cell", { name: "K2003" })).toBeTruthy();
     expect(getDb().users.find((u) => u.nik === "K2003")).toMatchObject({ name: "Baru Tiga", department: "QC", phone: "0812 ext 5" });
+  });
+
+  test("CSV import keeps a leading zero in NIK and phone", async () => {
+    const { user } = await renderApp("/karyawan", "ga");
+    const csv = new File([new TextEncoder().encode("NIK,Nama,Departemen,No HP\n00123,Ani,QC,081200001001\n")], "karyawan.csv");
+    await user.upload(await screen.findByLabelText("File Excel"), csv);
+    expect(await screen.findByText("Baru: 1 · Diperbarui: 0 · Error: 0")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Simpan import" }));
+    // raw: true is what keeps SheetJS from turning both cells into numbers and eating the zero.
+    const stored = getDb().users.find((u) => u.nik === "00123");
+    expect(stored).toMatchObject({ nik: "00123", name: "Ani", department: "QC", phone: "081200001001" });
+    expect(getDb().users.some((u) => u.nik === "123" || u.phone === "81200001001")).toBe(false);
   });
 
   test("a list change closes the row-scoped suspend form", async () => {
@@ -143,7 +156,11 @@ describe("employees", () => {
     await user.type(await screen.findByLabelText("Cari NIK / nama"), "K1002");
     const row = () => screen.getByRole("cell", { name: "Budi Santoso" }).closest("tr")!;
     await screen.findByRole("cell", { name: "Budi Santoso" });
+
+    // Reset is irreversible (it invalidates the password and every session), so it arms first.
     await user.click(within(row()).getByRole("button", { name: "Reset password" }));
+    expect(screen.queryByText(/Password sementara/)).toBeNull();
+    await user.click(within(row()).getByRole("button", { name: "Ya, reset password" }));
     const table = (await screen.findByText(/Password sementara/)).closest("table")!;
     expect(within(table).getByRole("cell", { name: getDb().users.find((u) => u.id === "k1002")!.password })).toBeTruthy();
 
@@ -195,9 +212,34 @@ describe("admin & vendor accounts", () => {
     expect(getDb().users.some((u) => u.nik === "op3")).toBe(false);
   });
 
-  test("admin GA does not see the admin accounts page", async () => {
-    await renderApp("/karyawan", "ga");
-    await screen.findByLabelText("File Excel");
-    expect(screen.queryByRole("link", { name: "Admin & Vendor" })).toBeNull();
+  test("admin GA sees the admin accounts page but only vendor accounts", async () => {
+    await renderApp("/admin-user", "ga");
+    await screen.findByRole("heading", { name: "Admin & Vendor" });
+    // Spec 6.1: vendor accounts are ADMIN_GA work; admin accounts are Super-Admin-only, so the
+    // role select offers VENDOR alone and no admin row is listed.
+    const options = within(await screen.findByLabelText("Role")).getAllByRole("option");
+    expect(options.map((o) => (o as HTMLOptionElement).value)).toEqual(["VENDOR"]);
+    const table = (await screen.findByText("Akun admin & vendor")).closest("table")!;
+    expect(within(table).getByRole("cell", { name: "Operator PT Trans Jaya" })).toBeTruthy();
+    expect(within(table).queryByRole("cell", { name: "Super Admin" })).toBeNull();
+    expect(within(table).queryByRole("cell", { name: "Admin GA" })).toBeNull();
+  });
+
+  test("admin reset password needs a confirmation", async () => {
+    const { user } = await renderApp("/admin-user", "admin");
+    const row = (await screen.findByRole("cell", { name: "Operator PT Trans Jaya" })).closest("tr")!;
+    await user.click(within(row).getByRole("button", { name: "Reset password" }));
+    expect(screen.queryByText(/Password sementara/)).toBeNull();
+    await user.click(within(row).getByRole("button", { name: "Ya, reset password" }));
+    const table = (await screen.findByText(/Password sementara/)).closest("table")!;
+    expect(within(table).getByRole("cell", { name: getDb().users.find((u) => u.id === "vendor")!.password })).toBeTruthy();
+  });
+
+  test("admin GA cannot open the super-admin-only pages", async () => {
+    await renderApp("/admin-user", "ga");
+    await screen.findByRole("heading", { name: "Admin & Vendor" });
+    // /admin-user is ADMIN_GA's since vendor accounts are theirs; /pengaturan is still Super only.
+    expect(screen.getByRole("link", { name: "Admin & Vendor" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Pengaturan" })).toBeNull();
   });
 });

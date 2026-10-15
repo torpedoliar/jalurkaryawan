@@ -57,8 +57,8 @@ describe("trip harian", () => {
     const { user } = await renderApp("/trip", "ga");
     fireEvent.change(await screen.findByLabelText("Tanggal"), { target: { value: "2026-10-15" } });
     await screen.findByRole("row", { name: R1_PAGI });
-    await user.click(screen.getByRole("button", { name: "Batalkan semua trip tanggal ini" }));
-    await user.click(screen.getByRole("button", { name: "Ya, batalkan semua trip 2026-10-15" }));
+    await user.click(screen.getByRole("button", { name: "Batalkan semua trip 2026-10-15 (semua rute & shift)" }));
+    await user.click(screen.getByRole("button", { name: "Ya, batalkan semua trip 2026-10-15 (semua rute & shift)" }));
     expect((await screen.findByRole("status")).textContent).toBe("36 trip dibatalkan.");
     const day = getDb().trips.filter((t) => t.date === "2026-10-15");
     expect(day.every((t) => t.status === "CANCELLED")).toBe(true);
@@ -129,6 +129,45 @@ describe("trip harian", () => {
     fireEvent.change(screen.getByLabelText("Tanggal"), { target: { value: "2026-10-15" } });
     await screen.findByRole("row", { name: R1_PAGI });
     expect(screen.queryByLabelText("Bus baru")).toBeNull();
+  });
+
+  test("changing the route or shift filter closes the bus panel and the row confirm", async () => {
+    const { user } = await renderApp("/trip", "ga");
+    await screen.findByRole("row", { name: R1_PAGI });
+    await user.click(within(row(R1_PAGI)).getByRole("button", { name: "Ganti bus" }));
+    expect(screen.getByLabelText("Bus baru")).toBeTruthy();
+
+    // The panel is bound to a trip id; a filter change drops that row, so the panel must go with it.
+    await user.selectOptions(screen.getByLabelText("Rute"), "r2");
+    await screen.findByText("6 trip");
+    expect(screen.queryByLabelText("Bus baru")).toBeNull();
+
+    const r2 = /^05:25 R2 Pagi Jemput/;
+    await user.click(within(row(r2)).getByRole("button", { name: "Batalkan" }));
+    expect(within(row(r2)).getByRole("button", { name: "Ya, batalkan" })).toBeTruthy();
+    await user.selectOptions(screen.getByLabelText("Shift"), "siang");
+    await screen.findByText("2 trip");
+    expect(screen.queryByRole("button", { name: "Ya, batalkan" })).toBeNull();
+    expect(getDb().trips.some((t) => t.status === "CANCELLED")).toBe(false);
+  });
+
+  test("the date-wide cancel button names every route and shift", async () => {
+    const { user } = await renderApp("/trip", "ga");
+    await screen.findByRole("row", { name: R1_PAGI });
+    fireEvent.change(screen.getByLabelText("Tanggal"), { target: { value: "2026-10-15" } });
+    // The request carries only the date, so the label has to say it hits every route and shift.
+    expect(await screen.findByRole("button", { name: /Batalkan semua trip 2026-10-15 \(semua rute & shift\)/ })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Batalkan semua trip 2026-10-15 (semua rute & shift)" }));
+    expect((await screen.findByRole("button", { name: /Ya, batalkan semua trip 2026-10-15 \(semua rute & shift\)/ })).textContent).toContain("semua rute & shift");
+    expect(getDb().trips.some((t) => t.status === "CANCELLED")).toBe(false);
+  });
+
+  test("the bus panel names the trip it belongs to", async () => {
+    const { user } = await renderApp("/trip", "ga");
+    await screen.findByRole("row", { name: R1_PAGI });
+    await user.click(within(row(R1_PAGI)).getByRole("button", { name: "Ganti bus" }));
+    // A filter or a reload can leave the trip off the list; the panel must still say which one it edits.
+    expect(screen.getByText("R1 Pagi Jemput 05:20")).toBeTruthy();
   });
 
   test("a departed trip offers no change or cancel", async () => {

@@ -55,6 +55,8 @@ export function Trips() {
   const label = (t: Trip) => `${code(t)} ${shiftName(t)} ${DIRECTION_LABEL[t.direction]} ${hhmm(t.departureAt)}`;
   // A mutation invalidates the manifest and the open dialog alike: they belong to the row before it changed.
   const reset = () => { setChange(undefined); setConfirm(""); setOpen(undefined); trips.reload(); };
+  /** A filter change also drops every row-scoped panel: it would be bound to a trip nobody can see. */
+  const clear = () => { setChange(undefined); setConfirm(""); setOpen(undefined); setDone(""); };
 
   async function saveBus() {
     if (change && await run(() => api.put(ENDPOINTS.tripBus(change.tripId), Trip, { busId: change.busId }))) reset();
@@ -73,26 +75,29 @@ export function Trips() {
       <ErrorText error={error ?? trips.error ?? lookups.error} />
       {done && <p role="status">{done}</p>}
       <div className="card row">
-        <label>Tanggal<input type="date" value={date} onChange={(e) => { setDate(e.target.value); setOpen(undefined); setChange(undefined); setConfirm(""); setDone(""); }} /></label>
+        <label>Tanggal<input type="date" value={date} onChange={(e) => { setDate(e.target.value); clear(); }} /></label>
         <label>Rute
-          <select value={routeId} onChange={(e) => setRouteId(e.target.value)}>
+          <select value={routeId} onChange={(e) => { setRouteId(e.target.value); clear(); }}>
             <option value="">Semua</option>
             {routes.map((r) => <option key={r.id} value={r.id}>{r.code} {r.name}</option>)}
           </select>
         </label>
         <label>Shift
-          <select value={shiftId} onChange={(e) => setShiftId(e.target.value)}>
+          <select value={shiftId} onChange={(e) => { setShiftId(e.target.value); clear(); }}>
             <option value="">Semua</option>
             {shifts.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         </label>
+        {/* The request carries only the date, so the label must name every route and shift it hits. */}
         {confirm === "date"
-          ? <button className="primary" disabled={busy} onClick={() => void cancelDate()}>Ya, batalkan semua trip {date}</button>
-          : <button onClick={() => setConfirm("date")}>Batalkan semua trip tanggal ini</button>}
+          ? <button className="primary" disabled={busy} onClick={() => void cancelDate()}>Ya, batalkan semua trip {date} (semua rute &amp; shift)</button>
+          : <button onClick={() => setConfirm("date")}>Batalkan semua trip {date} (semua rute &amp; shift)</button>}
       </div>
 
       {change && (
         <div className="card row">
+          {/* A filter or page change closes this panel; while it is open it must name its trip. */}
+          <strong>{trips.data?.find((t) => t.id === change.tripId) ? label(trips.data.find((t) => t.id === change.tripId)!) : ""}</strong>
           <label>Bus baru
             <select value={change.busId} onChange={(e) => setChange({ ...change, busId: e.target.value })}>
               {buses.filter((b) => b.active).map((b) => <option key={b.id} value={b.id}>{b.plate} ({b.capacity})</option>)}

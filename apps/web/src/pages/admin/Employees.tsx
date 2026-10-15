@@ -43,6 +43,7 @@ export function Employees() {
   const [passwords, setPasswords] = useState<TempPassword[]>([]);
   const [suspend, setSuspend] = useState<{ id: string; until: string; reason: string }>();
   const [offId, setOffId] = useState("");
+  const [resetId, setResetId] = useState("");
   const { busy, error, run } = useAction();
 
   async function pick(file: File | undefined) {
@@ -64,7 +65,7 @@ export function Employees() {
   }
   async function resetPassword(id: string) {
     const tp = await run(() => api.post(ENDPOINTS.userResetPassword(id), TempPassword));
-    if (tp) setPasswords((p) => addPasswords(p, [tp]));
+    if (tp) { setResetId(""); setPasswords((p) => addPasswords(p, [tp])); }
   }
   async function act(path: string) {
     if (await run(() => api.post(path, UserSummary))) { setOffId(""); list.reload(); }
@@ -117,7 +118,7 @@ export function Employees() {
       )}
 
       {/* A new page/search drops rows, so a row-scoped form or confirm would be bound to a row nobody can see. */}
-      <label>Cari NIK / nama<input value={q} onChange={(e) => { setQ(e.target.value); setPage(1); setSuspend(undefined); setOffId(""); }} /></label>
+      <label>Cari NIK / nama<input value={q} onChange={(e) => { setQ(e.target.value); setPage(1); setSuspend(undefined); setOffId(""); setResetId(""); }} /></label>
       <table className="card">
         <caption>Daftar karyawan</caption>
         <thead><tr><th>NIK</th><th>Nama</th><th>Departemen</th><th>No HP</th><th>Status</th><th></th></tr></thead>
@@ -128,7 +129,9 @@ export function Employees() {
               <td>
                 {u.active && (
                   <>
-                    <button disabled={busy} onClick={() => void resetPassword(u.id)}>Reset password</button>
+                    {resetId === u.id
+                      ? <button disabled={busy} onClick={() => void resetPassword(u.id)}>Ya, reset password</button>
+                      : <button onClick={() => setResetId(u.id)}>Reset password</button>}
                     {u.bookingSuspendedUntil && u.bookingSuspendedUntil >= today()
                       ? <button disabled={busy} onClick={() => void act(ENDPOINTS.userUnsuspend(u.id))}>Cabut pembekuan</button>
                       : <button onClick={() => setSuspend({ id: u.id, until: "", reason: "" })}>Bekukan</button>}
@@ -142,7 +145,7 @@ export function Employees() {
           ))}
         </tbody>
       </table>
-      <Pager data={list.data} page={page} onPage={(p) => { setPage(p); setSuspend(undefined); setOffId(""); }} />
+      <Pager data={list.data} page={page} onPage={(p) => { setPage(p); setSuspend(undefined); setOffId(""); setResetId(""); }} />
     </>
   );
 }
