@@ -17,8 +17,8 @@ export function Home() {
       <ErrorText error={error ?? list.error} />
       {list.data?.length === 0 && <p>Belum ada booking 7 hari ke depan.</p>}
       {list.data?.map((b) => (
-        <article key={b.id} className="card" style={{ borderLeft: `6px solid ${b.routeColor}` }}>
-          <strong>{b.date} · {DIRECTION_LABEL[b.direction]} · {b.routeCode} {b.routeName}</strong>
+        <article key={b.id} className="card">
+          <strong><span className="swatch" style={{ background: b.routeColor }} /> {b.date} · {DIRECTION_LABEL[b.direction]} · {b.routeCode} {b.routeName}</strong>
           <div>{b.stopName}, jemput {hhmm(b.pickupAt)} · bus {b.busPlate}</div>
           <div>{BOOKING_STATUS_TEXT[b.status]}</div>
           {b.status === "BOOKED" && (Date.now() < Date.parse(b.cutoffAt)

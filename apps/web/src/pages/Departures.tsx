@@ -24,7 +24,7 @@ export function Departures() {
           {data?.map((d) => (
             <tr key={d.tripId} className={d.mine ? "mine" : undefined}>
               <td>{hhmm(d.departureAt)}</td>
-              <td style={{ borderLeft: `4px solid ${d.routeColor}` }}>{d.routeCode} {d.routeName}</td>
+              <td><span className="swatch" style={{ background: d.routeColor }} /> {d.routeCode} {d.routeName}</td>
               <td>{d.shiftName}</td>
               <td>{DIRECTION_LABEL[d.direction]}</td>
               <td>{d.busPlate}</td>

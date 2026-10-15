@@ -20,5 +20,5 @@ button.primary { background: var(--accent); color: #fff; border: 0; border-radiu
 .badge.ALMOST { background: #fff4e5; color: var(--warn); }
 .badge.FULL, .badge.CANCELLED { background: #fde8e7; color: var(--danger); }
 .center { min-height: 100vh; display: grid; place-items: center; }
-.swatch { display: inline-block; width: 1em; height: 1em; border-radius: 2px; vertical-align: middle; }
+.swatch { display: inline-block; width: 0.75em; height: 0.75em; border-radius: 999px; border: 1px solid var(--line); vertical-align: middle; }
 @media (max-width: 720px) { .app { grid-template-columns: 1fr; } nav { flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid var(--line); } }
