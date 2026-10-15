@@ -1,8 +1,9 @@
 import { describe, expect, test } from "vitest";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { write } from "xlsx";
 import { BusInput, SubscriptionInput, TripTemplateInput, UserInput, VendorInput } from "@bms/shared";
 import { ApiFailure } from "../src/api";
-import { errorText, pct, readXlsx } from "../src/ui";
+import { errorText, pct, readXlsx, useLoad } from "../src/ui";
 
 describe("errorText", () => {
   test("ApiFailure keeps the server message verbatim", async () => {
@@ -75,5 +76,30 @@ describe("pct", () => {
   test("a zero-capacity trip reads as 0%, not NaN", () => {
     expect(pct(0, 0)).toBe(0);
     expect(pct(5, 0)).toBe(0);
+  });
+});
+
+describe("useLoad", () => {
+  test("a failed fetch surfaces the server message as error", async () => {
+    const { result } = renderHook(() => useLoad(() => Promise.reject(new ApiFailure("TRIP_FULL", "Sudah penuh.", 409)), []));
+    await waitFor(() => expect(result.current.error).toBe("Sudah penuh."));
+    expect(result.current.data).toBeUndefined();
+  });
+
+  test("a stale response from a changed dependency is discarded", async () => {
+    let resolveFirst: (v: string) => void = () => {};
+    const first = new Promise<string>((r) => { resolveFirst = r; });
+    // First dependency: a fetch we hold open. Second: an already-resolved fetch.
+    const fetches: Record<string, () => Promise<string>> = {
+      a: () => first,
+      b: () => Promise.resolve("b-data"),
+    };
+    const { result, rerender } = renderHook(({ dep }: { dep: string }) => useLoad(() => fetches[dep]!(), [dep]), {
+      initialProps: { dep: "a" },
+    });
+    rerender({ dep: "b" }); // dependency changed while "a" is still in flight
+    await waitFor(() => expect(result.current.data).toBe("b-data"));
+    await act(async () => resolveFirst("a-data")); // the old fetch finally resolves, after "b" won
+    expect(result.current.data).toBe("b-data"); // stale "a" response is dropped
   });
 });
