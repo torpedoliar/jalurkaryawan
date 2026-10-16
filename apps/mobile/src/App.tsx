@@ -60,6 +60,7 @@ export function App({ initialTab }: { initialTab?: string }) {
     return (
       <View>
         <Text accessibilityRole="header">Setup Awal</Text>
+        <Text>Belum ada Super Admin.</Text>
         <Text>Hubungi admin untuk setup awal lewat web.</Text>
       </View>
     );
