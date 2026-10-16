@@ -1,0 +1,10 @@
+{
+  "expo": {
+    "name": "Bus Karyawan",
+    "slug": "bms-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "android": { "package": "com.company.bms" },
+    "extra": { "eas": { "projectId": "00000000-0000-0000-0000-000000000000" } }
+  }
+}
