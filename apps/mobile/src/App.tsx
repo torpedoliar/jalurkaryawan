@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Button, Pressable, Text, View } from "react-native";
+import { Button, Pressable, SafeAreaView, ScrollView, Text, View } from "react-native";
+import { StatusBar } from "expo-status-bar";
 import { ENDPOINTS, SetupStatus, type Me } from "@bms/shared";
 import { api, apiEvents, loadSession, logout } from "./api";
 import { AuthContext } from "./auth";
@@ -76,27 +77,30 @@ export function App({ initialTab }: { initialTab?: string }) {
             <Button title="Keluar" onPress={() => void signOut()} />
           </View>
         ) : (
-          <View>
-            <Text>{me.name}</Text>
-            {TABS.map((t) => (
-              <Pressable key={t.id} accessibilityRole="button" onPress={() => setTab(t.id)}>
-                <Text style={{ fontWeight: tab === t.id ? "700" : "400" }}>{t.label}</Text>
-              </Pressable>
-            ))}
-            <Button title="Keluar" onPress={() => void signOut()} />
-            {me.bookingSuspendedUntil !== null && me.bookingSuspendedUntil >= today() && (
-              <Text accessibilityLiveRegion="polite">
-                Booking kamu dibekukan sampai {me.bookingSuspendedUntil}. Alasan: {me.suspendReason}
-              </Text>
-            )}
-            {tab === "beranda" && <Home />}
-            {tab === "booking" && <Book />}
-            {tab === "langganan" && <Subscriptions />}
-            {tab === "riwayat" && <History />}
-            {tab === "notifikasi" && <Notifications />}
-            {tab === "keberangkatan" && <Departures />}
-            {tab === "ganti-password" && <ChangePassword />}
-          </View>
+          <SafeAreaView style={{ flex: 1 }}>
+            <StatusBar style="auto" />
+            <ScrollView>
+              <Text>{me.name}</Text>
+              {TABS.map((t) => (
+                <Pressable key={t.id} accessibilityRole="button" onPress={() => setTab(t.id)}>
+                  <Text style={{ fontWeight: tab === t.id ? "700" : "400" }}>{t.label}</Text>
+                </Pressable>
+              ))}
+              <Button title="Keluar" onPress={() => void signOut()} />
+              {me.bookingSuspendedUntil !== null && me.bookingSuspendedUntil >= today() && (
+                <Text accessibilityLiveRegion="polite">
+                  Booking kamu dibekukan sampai {me.bookingSuspendedUntil}. Alasan: {me.suspendReason}
+                </Text>
+              )}
+              {tab === "beranda" && <Home />}
+              {tab === "booking" && <Book />}
+              {tab === "langganan" && <Subscriptions />}
+              {tab === "riwayat" && <History />}
+              {tab === "notifikasi" && <Notifications />}
+              {tab === "keberangkatan" && <Departures />}
+              {tab === "ganti-password" && <ChangePassword />}
+            </ScrollView>
+          </SafeAreaView>
         )}
     </AuthContext.Provider>
   );

@@ -121,7 +121,7 @@ describe("employee", () => {
     const u = db.users.find((x) => x.nik === "K1001")!;
     db.notifications.push({ id: "n-test", userId: u.id, type: "TRIP_CANCELLED", title: "Trip dibatalkan", body: "R1 pagi dibatalkan.", data: {}, readAt: null, createdAt: `${TODAY}T00:00:00+07:00` });
     await renderApp("riwayat", "K1001");
-    const rows = await screen.findAllByRole("row");
+    const rows = await screen.findAllByTestId("history-row");
     expect(within(rows[0]!).getByText(addDays(TODAY, 7), { exact: false })).toBeTruthy();
 
     await fireEvent.press(screen.getByRole("button", { name: "Notifikasi" }));
@@ -133,7 +133,7 @@ describe("employee", () => {
   test("departure board highlights the employee's own trips and labels status", async () => {
     await renderApp("keberangkatan", "K1001");
     await screen.findByRole("header", { name: "Keberangkatan" });
-    const mine = await screen.findAllByRole("selected");
+    const mine = await screen.findAllByTestId("departure-mine");
     expect(mine.length).toBeGreaterThan(0);
     expect(screen.getAllByText("TERSEDIA").length).toBeGreaterThan(0);
   });

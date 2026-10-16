@@ -19,6 +19,7 @@ export function Subscriptions() {
   const { busy, error, run } = useAction();
   const routeCode = (id: string) => lookups.data?.[0].find((r) => r.id === id)?.code ?? id;
   const shiftName = (id: string) => lookups.data?.[1].find((s) => s.id === id)?.name ?? id;
+  const ready = choice.shiftId && choice.direction && choice.routeId;
 
   async function submit() {
     // SubscriptionInput.parse throws ZodError inside run, so its message lands in the alert.
@@ -54,7 +55,7 @@ export function Subscriptions() {
       {result && (
         <Text accessibilityLiveRegion="polite">{`Terbooked ${result.booked.length} tanggal${result.rejected.length > 0 ? `; penuh: ${result.rejected.join(", ")}` : ""}${result.skippedCutoff.length > 0 ? `; lewat batas: ${result.skippedCutoff.join(", ")}` : ""}`}</Text>
       )}
-      <Button title={busy ? "Membuat..." : "Buat langganan"} onPress={() => void submit()} disabled={busy || !choice.stopId || weekdays.length === 0} />
+      <Button title={busy ? "Membuat..." : "Buat langganan"} onPress={() => void submit()} disabled={busy || !ready || !choice.stopId || weekdays.length === 0} />
       {list.data?.length === 0 && <Text>Belum ada langganan.</Text>}
       {list.data?.map((s) => (
         <View key={s.id} accessible accessibilityRole="summary">

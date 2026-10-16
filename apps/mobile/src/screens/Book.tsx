@@ -85,7 +85,7 @@ export function Book() {
       )}
       <ErrorText error={error ?? avail.error} />
       {booked && <Text accessibilityLiveRegion="polite">{`Booking berhasil: ${booked.routeCode} ${booked.stopName}, jemput ${hhmm(booked.pickupAt)}, bus ${booked.busPlate}.`}</Text>}
-      <Button title={busy ? "Memesan..." : "Pesan"} onPress={() => void submit()} disabled={busy || suspended || !choice.stopId} />
+      <Button title={busy ? "Memesan..." : "Pesan"} onPress={() => void submit()} disabled={busy || suspended || !ready || !choice.stopId} />
     </View>
   );
 }

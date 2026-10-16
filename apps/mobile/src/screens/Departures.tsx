@@ -26,7 +26,7 @@ export function Departures() {
       <ErrorText error={error} />
       {(data?.length === 0) && <Text>Belum ada trip.</Text>}
       {data?.map((d) => (
-        <View key={d.tripId} accessible accessibilityRole={d.mine ? "selected" : "text"}>
+        <View key={d.tripId} accessible accessibilityRole="text" accessibilityState={{ selected: d.mine }} testID={d.mine ? "departure-mine" : "departure"}>
           <Text style={{ fontWeight: d.mine ? "700" : "400" }}>
             {hhmm(d.departureAt)} · {d.routeCode} {d.routeName} · {d.shiftName} · {DIRECTION_LABEL[d.direction]} · {d.busPlate} · {d.bookedCount}/{d.capacity} ·
           </Text>

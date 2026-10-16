@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Pressable, Text } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { ZodError } from "zod";
 import { jakartaDate, type BookingStatus, type DepartureStatus, type Direction } from "@bms/shared";
 import { ApiFailure } from "./api";
@@ -94,6 +94,7 @@ export function ChipSelect<T extends string>({ label, options, value, onChange }
   return (
     <>
       <Text accessibilityRole="header">{label}</Text>
+      <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
       {options.map((o) => (
         <Pressable
           key={o.value}
@@ -101,10 +102,12 @@ export function ChipSelect<T extends string>({ label, options, value, onChange }
           accessibilityLabel={o.value}
           accessibilityState={{ selected: o.value === value }}
           onPress={() => onChange(o.value)}
+          style={{ padding: 8, margin: 2 }}
         >
           <Text style={{ fontWeight: o.value === value ? "700" : "400" }}>{o.label}</Text>
         </Pressable>
       ))}
+      </View>
     </>
   );
 }
