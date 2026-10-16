@@ -18,7 +18,7 @@ export function Home() {
       <ErrorText error={error ?? list.error} />
       {list.data?.length === 0 && <Text>Belum ada booking 7 hari ke depan.</Text>}
       {list.data?.map((b) => (
-        <View key={b.id} accessibilityRole="summary">
+        <View key={b.id} accessible accessibilityRole="summary">
           <Text style={{ fontWeight: "700" }}>{b.date} · {DIRECTION_LABEL[b.direction]} · {b.routeCode} {b.routeName}</Text>
           <Text>{b.stopName}, jemput {hhmm(b.pickupAt)} · bus {b.busPlate}</Text>
           <Text>{BOOKING_STATUS_TEXT[b.status]}</Text>

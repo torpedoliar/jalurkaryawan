@@ -57,7 +57,7 @@ export function Subscriptions() {
       <Button title={busy ? "Membuat..." : "Buat langganan"} onPress={() => void submit()} disabled={busy || !choice.stopId || weekdays.length === 0} />
       {list.data?.length === 0 && <Text>Belum ada langganan.</Text>}
       {list.data?.map((s) => (
-        <View key={s.id} accessibilityRole="summary">
+        <View key={s.id} accessible accessibilityRole="summary">
           <Text>{routeCode(s.routeId)} · {shiftName(s.shiftId)} · {DIRECTION_LABEL[s.direction]} · {s.startDate} s/d {s.endDate ?? "seterusnya"} · {dayNames(s.weekdays)} · {s.status === "ACTIVE" ? "Aktif" : "Berakhir"}</Text>
           {s.status === "ACTIVE" && (endId === s.id
             ? <Button title="Ya, akhiri" onPress={() => void end(s.id)} disabled={busy} />
