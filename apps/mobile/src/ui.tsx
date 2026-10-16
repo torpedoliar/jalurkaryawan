@@ -98,6 +98,7 @@ export function ChipSelect<T extends string>({ label, options, value, onChange }
         <Pressable
           key={o.value}
           accessibilityRole="button"
+          accessibilityLabel={o.value}
           accessibilityState={{ selected: o.value === value }}
           onPress={() => onChange(o.value)}
         >
