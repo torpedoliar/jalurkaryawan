@@ -1,4 +1,7 @@
+import { createElement } from "react";
 import { registerRootComponent } from "expo";
+import { StatusBar } from "expo-status-bar";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { App } from "./src/App";
 
 if (process.env.EXPO_PUBLIC_USE_MOCK === "true") {
@@ -10,4 +13,5 @@ if (process.env.EXPO_PUBLIC_USE_MOCK === "true") {
   setupServer(...(handlers as unknown as Parameters<typeof setupServer>)).listen({ onUnhandledRequest: "bypass" });
 }
 
-registerRootComponent(App);
+// One inset wrapper for every screen (login, maintenance, tabs). RN's own SafeAreaView is deprecated and gives no inset on Android.
+registerRootComponent(() => createElement(SafeAreaProvider, null, createElement(SafeAreaView, { style: { flex: 1 } }, createElement(StatusBar, { style: "auto" }), createElement(App))));

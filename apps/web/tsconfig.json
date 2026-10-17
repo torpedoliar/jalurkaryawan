@@ -3,7 +3,9 @@
   "compilerOptions": {
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
-    "types": ["vite/client", "node"]
+    "types": ["vite/client", "node"],
+    // apps/mobile pulls @types/react 19 and pnpm hoists it; react-router has no @types/react peer, so pin web's own 18 types.
+    "paths": { "react": ["./node_modules/@types/react"], "react/*": ["./node_modules/@types/react/*"] }
   },
   "include": ["src", "test", "e2e", "vite.config.ts", "playwright.config.ts"]
 }

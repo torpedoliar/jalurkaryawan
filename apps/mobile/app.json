@@ -4,7 +4,7 @@
     "slug": "bms-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "android": { "package": "com.company.bms" },
+    "android": { "package": "com.santosjayaabadi.bms" },
     "extra": { "eas": { "projectId": "00000000-0000-0000-0000-000000000000" } }
   }
 }

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Button, Pressable, SafeAreaView, ScrollView, Text, View } from "react-native";
-import { StatusBar } from "expo-status-bar";
+import { Button, Pressable, ScrollView, Text, View } from "react-native";
 import { ENDPOINTS, SetupStatus, type Me } from "@bms/shared";
 import { api, apiEvents, loadSession, logout } from "./api";
 import { AuthContext } from "./auth";
@@ -81,9 +80,7 @@ export function App({ initialTab }: { initialTab?: string }) {
             <Button title="Keluar" onPress={() => void signOut()} />
           </View>
         ) : (
-          <SafeAreaView style={{ flex: 1 }}>
-            <StatusBar style="auto" />
-            <ScrollView>
+          <ScrollView>
               <Text>{me.name}</Text>
               {TABS.map((t) => (
                 <Pressable key={t.id} accessibilityRole="button" accessibilityState={{ selected: tab === t.id }} onPress={() => setTab(t.id)}>
@@ -103,8 +100,7 @@ export function App({ initialTab }: { initialTab?: string }) {
               {tab === "notifikasi" && <Notifications />}
               {tab === "keberangkatan" && <Departures />}
               {tab === "ganti-password" && <ChangePassword />}
-            </ScrollView>
-          </SafeAreaView>
+          </ScrollView>
         )}
     </AuthContext.Provider>
   );
