@@ -44,6 +44,21 @@ describe("api client", () => {
     expect(bodies[0]).toContain("rt.");
   });
 
+  test("concurrent 401s share a single refresh", async () => {
+    await login("K1001", DEMO_PASSWORD);
+    const fresh = await freshLogin("K1001");
+    let refreshes = 0;
+    server.use(
+      http.get(`*${ENDPOINTS.me}`, unauthorized, { once: true }),
+      http.get(`*${ENDPOINTS.departures}`, unauthorized, { once: true }),
+      http.post(`*${ENDPOINTS.refresh}`, () => { refreshes++; return HttpResponse.json(fresh); }),
+    );
+    const [me, rows] = await Promise.all([api.get(ENDPOINTS.me, Me), api.get(ENDPOINTS.departures, z.array(Departure), { date: "2026-10-14" })]);
+    expect(me.nik).toBe("K1001");
+    expect(Array.isArray(rows)).toBe(true);
+    expect(refreshes).toBe(1);
+  });
+
   test("401 after a failed refresh clears both tokens and logs out once, no loop", async () => {
     await login("K1001", DEMO_PASSWORD);
     let refreshes = 0;

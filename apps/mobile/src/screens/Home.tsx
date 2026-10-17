@@ -2,7 +2,7 @@ import { Button, Text, View } from "react-native";
 import { z } from "zod";
 import { Booking, ENDPOINTS, addDays } from "@bms/shared";
 import { api } from "../api";
-import { BOOKING_STATUS_TEXT, DIRECTION_LABEL, ErrorText, hhmm, today, useAction, useLoad } from "../ui";
+import { BOOKING_STATUS_TEXT, DIRECTION_LABEL, ErrorText, RouteSwatch, hhmm, today, useAction, useLoad } from "../ui";
 
 /** Spec 6.2 beranda: bookings for the next 7 days; cancel only before cutoff. */
 export function Home() {
@@ -18,8 +18,12 @@ export function Home() {
       <ErrorText error={error ?? list.error} />
       {list.data?.length === 0 && <Text>Belum ada booking 7 hari ke depan.</Text>}
       {list.data?.map((b) => (
-        <View key={b.id} accessible accessibilityRole="summary">
-          <Text style={{ fontWeight: "700" }}>{b.date} · {DIRECTION_LABEL[b.direction]} · {b.routeCode} {b.routeName}</Text>
+        // Not `accessible`: grouping would hide the Batalkan button from VoiceOver.
+        <View key={b.id} testID="booking-card">
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <RouteSwatch color={b.routeColor} />
+            <Text style={{ flexShrink: 1, fontWeight: "700" }}>{b.date} · {DIRECTION_LABEL[b.direction]} · {b.routeCode} {b.routeName}</Text>
+          </View>
           <Text>{b.stopName}, jemput {hhmm(b.pickupAt)} · bus {b.busPlate}</Text>
           <Text>{BOOKING_STATUS_TEXT[b.status]}</Text>
           {b.status === "BOOKED" && (Date.now() < Date.parse(b.cutoffAt)

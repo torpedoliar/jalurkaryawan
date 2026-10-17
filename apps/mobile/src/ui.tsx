@@ -77,6 +77,11 @@ export function StatusBadge({ status }: { status: DepartureStatus }) {
   return <Text style={{ fontWeight: "600", fontSize: 12 }}>{STATUS_LABEL[status]}</Text>;
 }
 
+/** Spec 6.2 "warna/kode rute": decorative dot; the route code beside it carries the meaning. */
+export function RouteSwatch({ color }: { color: string }) {
+  return <View testID="route-swatch" style={{ width: 12, height: 12, borderRadius: 6, marginRight: 6, backgroundColor: color }} />;
+}
+
 export const DIRECTION_LABEL: Record<Direction, string> = { PICKUP: "Jemput", DROPOFF: "Antar" };
 export const hhmm = (iso: string) => iso.slice(11, 16);
 /** Operational date (Asia/Jakarta) from the device clock. */
@@ -99,8 +104,8 @@ export function ChipSelect<T extends string>({ label, options, value, onChange }
         <Pressable
           key={o.value}
           accessibilityRole="button"
-          accessibilityLabel={o.value}
           accessibilityState={{ selected: o.value === value }}
+          testID={`chip-${o.value}`}
           onPress={() => onChange(o.value)}
           style={{ padding: 8, margin: 2 }}
         >

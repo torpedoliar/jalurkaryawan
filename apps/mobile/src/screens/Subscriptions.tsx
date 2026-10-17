@@ -37,11 +37,11 @@ export function Subscriptions() {
       <View>
         <Text>Mulai</Text>
         <TextInput value={startDate} onChangeText={setStart} placeholder="YYYY-MM-DD" accessibilityLabel="Mulai" />
-        <Pressable accessibilityRole="button" accessibilityLabel="mulai-hari-ini" onPress={() => setStart(today())}>
+        <Pressable accessibilityRole="button" testID="mulai-hari-ini" onPress={() => setStart(today())}>
           <Text>Hari ini</Text>
         </Pressable>
         {Array.from({ length: 7 }, (_, i) => addDays(today(), i)).map((d) => (
-          <Pressable key={d} accessibilityRole="button" accessibilityLabel={`mulai-${d}`} onPress={() => setStart(d)}>
+          <Pressable key={d} accessibilityRole="button" accessibilityState={{ selected: startDate === d }} testID={`mulai-${d}`} onPress={() => setStart(d)}>
             <Text style={{ fontWeight: startDate === d ? "700" : "400" }}>{d}</Text>
           </Pressable>
         ))}
@@ -58,7 +58,7 @@ export function Subscriptions() {
       <Button title={busy ? "Membuat..." : "Buat langganan"} onPress={() => void submit()} disabled={busy || !ready || !choice.stopId || weekdays.length === 0} />
       {list.data?.length === 0 && <Text>Belum ada langganan.</Text>}
       {list.data?.map((s) => (
-        <View key={s.id} accessible accessibilityRole="summary">
+        <View key={s.id} testID="subscription-card">
           <Text>{routeCode(s.routeId)} · {shiftName(s.shiftId)} · {DIRECTION_LABEL[s.direction]} · {s.startDate} s/d {s.endDate ?? "seterusnya"} · {dayNames(s.weekdays)} · {s.status === "ACTIVE" ? "Aktif" : "Berakhir"}</Text>
           {s.status === "ACTIVE" && (endId === s.id
             ? <Button title="Ya, akhiri" onPress={() => void end(s.id)} disabled={busy} />

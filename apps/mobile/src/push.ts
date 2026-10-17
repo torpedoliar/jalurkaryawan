@@ -6,7 +6,7 @@ import { api } from "./api";
 
 let currentToken: string | null = null;
 
-/** Spec 6.2: register FCM token after login. Never throws — push is best-effort. */
+/** Spec 6.2: register FCM token once the session is usable (login, restore, after forced change). Never throws — push is best-effort. */
 export async function registerPush(): Promise<void> {
   try {
     const { status: existing } = await Notifications.getPermissionsAsync();
@@ -27,7 +27,7 @@ export async function registerPush(): Promise<void> {
 /** Spec 6.2: delete FCM token on logout. Never throws. */
 export async function unregisterPush(): Promise<void> {
   try {
-    if (currentToken) await api.post(ENDPOINTS.deviceTokens, z.void(), { token: currentToken });
+    if (currentToken) await api.delete(ENDPOINTS.deviceTokens, z.void(), { token: currentToken });
   } catch {
     // best-effort: logout proceeds regardless
   } finally {

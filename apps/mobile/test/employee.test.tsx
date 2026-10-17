@@ -8,15 +8,17 @@ const TODAY = "2026-10-14";
 const TOMORROW = addDays(TODAY, 1);
 
 async function choose(label: string, value: string) {
-  await fireEvent.press(screen.getByLabelText(value));
+  await fireEvent.press(screen.getByTestId(`chip-${value}`));
 }
 
 describe("employee", () => {
   test("lands on Beranda with the next 7 days of bookings", async () => {
     await renderApp("beranda", "K1001");
     expect(await screen.findByRole("header", { name: "Beranda" })).toBeTruthy();
-    const cards = await screen.findAllByRole("summary");
+    const cards = await screen.findAllByTestId("booking-card");
     expect(cards.length).toBe(14);
+    expect(screen.getAllByTestId("route-swatch")).toHaveLength(14);
+    expect(screen.getByRole("button", { name: "Beranda", selected: true })).toBeTruthy();
     expect(screen.getAllByText(/R1 Cikarang/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Terminal Cikarang/).length).toBeGreaterThan(0);
   });
@@ -24,7 +26,7 @@ describe("employee", () => {
   test("cancel button hidden once cutoff has passed", async () => {
     jest.setSystemTime(new Date(`${TODAY}T04:00:00+07:00`)); // today's 05:20 pickup cutoff was 03:20
     await renderApp("beranda", "K1001");
-    await screen.findAllByRole("summary");
+    await screen.findAllByTestId("booking-card");
     expect(screen.queryAllByText("Batalkan").length).toBe(13);
     expect(screen.getAllByText("Batas batal lewat").length).toBe(1);
   });
@@ -42,8 +44,10 @@ describe("employee", () => {
     expect(await screen.findByText(/Booking berhasil/)).toBeTruthy();
 
     await fireEvent.press(screen.getByRole("button", { name: "Beranda" }));
-    await screen.findAllByRole("summary");
-    expect(screen.getAllByText(/R2 Bekasi Timur/).length).toBeGreaterThan(0);
+    const card = (await screen.findAllByTestId("booking-card")).find((c) => within(c).queryByText(/R2 Bekasi Timur/))!;
+    await fireEvent.press(within(card).getByText("Batalkan"));
+    expect(await within(card).findByText("Dibatalkan")).toBeTruthy();
+    expect(getDb().bookings.find((b) => b.source === "DAILY")!.status).toBe("CANCELLED");
   });
 
   test("booking error from server is shown verbatim (already booked pagi pickup)", async () => {
@@ -66,6 +70,23 @@ describe("employee", () => {
     expect(screen.getByRole("button", { name: "Pesan" }).props.accessibilityState?.disabled).toBe(true);
   });
 
+  // Banner/disabled button rely on the cached /me; a suspension set after login must still surface the server's message.
+  test("suspension applied after login reports USER_SUSPENDED verbatim", async () => {
+    await renderApp("booking", "K1001");
+    await screen.findByRole("header", { name: "Booking Harian" });
+    const u = getDb().users.find((x) => x.nik === "K1001")!;
+    u.bookingSuspendedUntil = addDays(TODAY, 3);
+    u.suspendReason = "No-show 3x dalam 30 hari";
+    await choose("Tanggal", TOMORROW);
+    await choose("Shift", "siang");
+    await choose("Arah", "PICKUP");
+    await choose("Rute", "r2");
+    await choose("Titik jemput", "r2s1");
+    await fireEvent.press(screen.getByRole("button", { name: "Pesan" }));
+    expect(await screen.findByText(ERROR_MESSAGES.USER_SUSPENDED)).toBeTruthy();
+    expect(getDb().bookings.filter((b) => b.source === "DAILY")).toHaveLength(0);
+  });
+
   test("ending a subscription needs a confirmation", async () => {
     await renderApp("langganan", "K1001");
     await screen.findByRole("header", { name: "Langganan" });
@@ -80,7 +101,7 @@ describe("employee", () => {
     expect(await screen.findByText("Langganan bentrok dengan langganan lain di shift dan arah yang sama.")).toBeTruthy();
 
     // K1001 also has seeded R1 subscriptions with their own Akhiri; act on the new R3 card only.
-    const card = (await screen.findAllByRole("summary")).find((c) => within(c).queryByText(/^R3 /))!;
+    const card = (await screen.findAllByTestId("subscription-card")).find((c) => within(c).queryByText(/^R3 /))!;
     await fireEvent.press(within(card).getByText("Akhiri"));
     expect(within(card).queryByText(/Berakhir/)).toBeNull();
     await fireEvent.press(within(card).getByText("Ya, akhiri"));
@@ -136,6 +157,11 @@ describe("employee", () => {
     const mine = await screen.findAllByTestId("departure-mine");
     expect(mine.length).toBeGreaterThan(0);
     expect(screen.getAllByText("TERSEDIA").length).toBeGreaterThan(0);
+    // Spec 6.2 "warna/kode rute": every row carries its route colour.
+    const rows = [...mine, ...screen.queryAllByTestId("departure")];
+    expect(screen.getAllByTestId("route-swatch")).toHaveLength(rows.length);
+    expect(screen.getAllByTestId("route-swatch")[0]!.props.style.backgroundColor).toMatch(/^#[0-9a-fA-F]{6}$/);
+    expect(screen.getByRole("button", { name: "Hari ini", selected: true })).toBeTruthy();
   });
 
   test("empty states on the employee screens", async () => {

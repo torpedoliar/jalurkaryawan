@@ -16,7 +16,7 @@ export function Notifications() {
       <ErrorText error={error ?? list.error} />
       {list.data?.length === 0 && <Text>Belum ada notifikasi.</Text>}
       {list.data?.map((n) => (
-        <View key={n.id} accessible accessibilityRole="summary">
+        <View key={n.id} testID="notification-card">
           <Text style={{ fontWeight: "700" }}>{n.title}</Text>
           <Text>{n.body}</Text>
           <Text>{n.createdAt.slice(0, 16).replace("T", " ")}</Text>

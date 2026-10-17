@@ -3,7 +3,6 @@ import { Button, Text, TextInput, View } from "react-native";
 import { login } from "../api";
 import { useAuth } from "../auth";
 import { ErrorText, useAction } from "../ui";
-import { registerPush } from "../push";
 
 export function Login() {
   const { setMe } = useAuth();
@@ -12,10 +11,7 @@ export function Login() {
   const { busy, error, run } = useAction();
   async function submit() {
     const me = await run(() => login(nik.trim(), password));
-    if (me) {
-      setMe(me);
-      await registerPush();
-    }
+    if (me) setMe(me);
   }
   return (
     <View>

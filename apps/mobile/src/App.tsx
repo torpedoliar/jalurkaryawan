@@ -5,7 +5,7 @@ import { ENDPOINTS, SetupStatus, type Me } from "@bms/shared";
 import { api, apiEvents, loadSession, logout } from "./api";
 import { AuthContext } from "./auth";
 import { today } from "./ui";
-import { unregisterPush } from "./push";
+import { registerPush, unregisterPush } from "./push";
 import { Login } from "./screens/Login";
 import { ChangePassword } from "./screens/ChangePassword";
 import { Maintenance } from "./screens/Maintenance";
@@ -52,6 +52,10 @@ export function App({ initialTab }: { initialTab?: string }) {
     return () => { live = false; };
   }, [bootKey]);
 
+  // One place for every way a session becomes usable: form login, SecureStore restore, forced password change.
+  const pushReady = me !== null && me.role === "EMPLOYEE" && !me.mustChangePassword;
+  useEffect(() => { if (pushReady) void registerPush(); }, [pushReady]);
+
   const back = useCallback(() => { setMaintenance(false); setBootKey((k) => k + 1); }, []);
   const signOut = useCallback(async () => { await unregisterPush(); await logout(); setMe(null); }, []);
 
@@ -82,7 +86,7 @@ export function App({ initialTab }: { initialTab?: string }) {
             <ScrollView>
               <Text>{me.name}</Text>
               {TABS.map((t) => (
-                <Pressable key={t.id} accessibilityRole="button" onPress={() => setTab(t.id)}>
+                <Pressable key={t.id} accessibilityRole="button" accessibilityState={{ selected: tab === t.id }} onPress={() => setTab(t.id)}>
                   <Text style={{ fontWeight: tab === t.id ? "700" : "400" }}>{t.label}</Text>
                 </Pressable>
               ))}

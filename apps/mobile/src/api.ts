@@ -103,6 +103,7 @@ export const api = {
   get: <T extends ZodTypeAny>(path: string, schema: T, query?: Query) => request("GET", path, schema, { query }),
   post: <T extends ZodTypeAny>(path: string, schema: T, body?: unknown) => request("POST", path, schema, { body }),
   put: <T extends ZodTypeAny>(path: string, schema: T, body: unknown) => request("PUT", path, schema, { body }),
+  delete: <T extends ZodTypeAny>(path: string, schema: T, body?: unknown) => request("DELETE", path, schema, { body }),
 };
 
 export async function login(nik: string, password: string): Promise<Me> {
