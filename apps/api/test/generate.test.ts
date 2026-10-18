@@ -7,6 +7,7 @@ import { GenerateService } from '../src/generate/generate.service';
 import { SettingsService } from '../src/settings/settings.service';
 import { AuditService } from '../src/audit/audit.service';
 import { NotificationsService } from '../src/notifications/notifications.service';
+import { FcmService } from '../src/notifications/fcm.service';
 import { AllocateService } from '../src/bookings/allocate.service';
 
 const prisma = new PrismaClient();
@@ -17,7 +18,7 @@ beforeAll(async () => {
   const audit = new AuditService(prisma);
   const settings = new SettingsService(prisma, audit, key);
   await settings.init();
-  generate = new GenerateService(prisma, settings, new NotificationsService(prisma), new AllocateService(prisma, settings));
+  generate = new GenerateService(prisma, settings, new NotificationsService(prisma, new FcmService(settings, prisma), settings), new AllocateService(prisma, settings));
   // stable fixture (upsert: re-runs are idempotent) — fills must produce rows for it
   const v = await prisma.vendor.upsert({ where: { id: 'gv' }, create: { id: 'gv', name: 'GenV', contact: '' }, update: {} });
   const bus = await prisma.bus.upsert({ where: { id: 'gbus' }, create: { id: 'gbus', plate: 'B GEN1', capacity: 30, vendorId: v.id }, update: {} });

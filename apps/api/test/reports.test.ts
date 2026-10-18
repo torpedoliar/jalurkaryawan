@@ -10,6 +10,7 @@ import { AppModule } from '../src/app.module';
 import { TripsService } from '../src/trips/trips.service';
 import { ReportsService } from '../src/reports/reports.service';
 import { NotificationsService } from '../src/notifications/notifications.service';
+import { FcmService } from '../src/notifications/fcm.service';
 import { SettingsService } from '../src/settings/settings.service';
 import { AuditService } from '../src/audit/audit.service';
 
@@ -37,7 +38,7 @@ beforeAll(async () => {
   const audit = new AuditService(prisma);
   const settings = new SettingsService(prisma, audit, key);
   await settings.init();
-  notifications = new NotificationsService(prisma);
+  notifications = new NotificationsService(prisma, new FcmService(settings, prisma), settings);
   tripsSvc = new TripsService(prisma, settings, notifications, audit);
   reports = new ReportsService(prisma, settings);
 

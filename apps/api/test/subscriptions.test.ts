@@ -7,6 +7,7 @@ import { SubscriptionsService } from '../src/bookings/subscriptions.service';
 import { AdminService } from '../src/admin/admin.service';
 import { AllocateService } from '../src/bookings/allocate.service';
 import { NotificationsService } from '../src/notifications/notifications.service';
+import { FcmService } from '../src/notifications/fcm.service';
 import { GenerateService } from '../src/generate/generate.service';
 import { SettingsService } from '../src/settings/settings.service';
 import { AuditService } from '../src/audit/audit.service';
@@ -37,7 +38,7 @@ beforeAll(async () => {
   const audit = new AuditService(prisma);
   const settings = new SettingsService(prisma, audit, key);
   await settings.init();
-  const notifications = new NotificationsService(prisma);
+  const notifications = new NotificationsService(prisma, new FcmService(settings, prisma), settings);
   const allocate = new AllocateService(prisma, settings);
   generate = new GenerateService(prisma, settings, notifications, allocate);
   subs = new SubscriptionsService(prisma, allocate, settings);
