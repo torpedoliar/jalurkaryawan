@@ -47,7 +47,8 @@ export class TemplatesService {
    * Rejection cases (full rollback, name the trip):
    *  - new bus capacity < any trip's bookedCount → CAPACITY_BELOW_BOOKED naming date+time+booked
    *  - weekday removed while future SCHEDULED trips on that weekday exist → VALIDATION_ERROR naming trip
-   * On success: propagate departureAt/capacity/bus/route/shift/direction, notify passengers SCHEDULE_CHANGED.
+   *  - route/shift/direction changed while a future SCHEDULED trip holds BOOKED seats → VALIDATION_ERROR naming trip
+   * On success: propagate departureAt/capacity/bus/route/shift/direction, notify passengers SCHEDULE_CHANGED, fillWindow.
    */
   async update(id: string, input: TripTemplateInput, actor: Actor) {
     const old = await this.prisma.tripTemplate.findUnique({ where: { id }, include: { route: true } });
@@ -77,6 +78,20 @@ export class TemplatesService {
             `Trip ${t.date} jam ${toJakartaIso(t.departureAt.getTime()).slice(11, 16)} masih memakai hari yang dihapus. Batalkan trip dulu.`,
           );
         }
+      }
+    }
+
+    // bookings carry route/shift/direction/stop: rewriting them under BOOKED seats leaves bookings stale
+    if (input.routeId !== old.routeId || input.shiftId !== old.shiftId || input.direction !== old.direction) {
+      const held = await this.prisma.trip.findFirst({
+        where: { templateId: id, status: 'SCHEDULED', departureAt: { gt: new Date() }, bookings: { some: { status: 'BOOKED' } } },
+        orderBy: { departureAt: 'asc' },
+      });
+      if (held) {
+        throw new DomainError(
+          'VALIDATION_ERROR',
+          `Trip ${held.date} jam ${toJakartaIso(held.departureAt.getTime()).slice(11, 16)} masih punya booking; rute/shift/arah tidak bisa diubah. Batalkan trip dulu.`,
+        );
       }
     }
 
@@ -119,6 +134,7 @@ export class TemplatesService {
       );
     }
     await this.audit.write({ actorId: actor.id, actorName: actor.name, action: 'TEMPLATE_UPDATE', entity: 'tripTemplate', entityId: id, before: old, after: updated.tpl });
+    await this.generate.fillWindow(); // mock parity: newly-added weekdays appear immediately
     return updated.tpl;
   }
 

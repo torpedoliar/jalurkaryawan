@@ -76,18 +76,20 @@ export class TripsService {
     if (trip.status === 'CANCELLED') return this.toTripRow(trip);
     if (trip.departureAt <= new Date()) throw new DomainError('VALIDATION_ERROR', 'Trip sudah berangkat.');
 
-    const bookings = await this.prisma.booking.findMany({ where: { tripId, status: 'BOOKED' } });
-    // mock allocate ADMIN_TRIP parity: bookedCount-- per BOOKED row flipped
-    const [updated] = await this.prisma.$transaction([
-      this.prisma.trip.update({
-        where: { id: tripId },
-        data: { status: 'CANCELLED', bookedCount: { decrement: bookings.length } },
-      }),
-      this.prisma.booking.updateMany({
-        where: { tripId, status: 'BOOKED' },
+    // mock allocate ADMIN_TRIP parity: bookedCount-- per BOOKED row flipped. Interactive tx: read the
+    // victims, flip, decrement by the flip COUNT (a concurrent user cancel cannot double-free a seat)
+    const { updated, bookings } = await this.prisma.$transaction(async (tx) => {
+      const bookings = await tx.booking.findMany({ where: { tripId, status: 'BOOKED' } });
+      const flipped = await tx.booking.updateMany({
+        where: { id: { in: bookings.map((b) => b.id) }, status: 'BOOKED' },
         data: { status: 'CANCELLED', cancelReason: 'ADMIN_TRIP', cancelledAt: new Date() },
-      }),
-    ]);
+      });
+      const updated = await tx.trip.update({
+        where: { id: tripId },
+        data: { status: 'CANCELLED', bookedCount: { decrement: flipped.count } },
+      });
+      return { updated, bookings };
+    });
     const time = toJakartaIso(trip.departureAt.getTime()).slice(11, 16);
     for (const b of bookings) {
       await this.notifications.insert(
