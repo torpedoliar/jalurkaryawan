@@ -4,8 +4,8 @@ CREATE TABLE "Vendor" (
     "name" TEXT NOT NULL,
     "contact" TEXT NOT NULL DEFAULT '',
     "active" BOOLEAN NOT NULL DEFAULT true,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMPTZ(3) NOT NULL,
 
     CONSTRAINT "Vendor_pkey" PRIMARY KEY ("id")
 );
@@ -17,8 +17,8 @@ CREATE TABLE "Bus" (
     "capacity" INTEGER NOT NULL,
     "vendorId" TEXT NOT NULL,
     "active" BOOLEAN NOT NULL DEFAULT true,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMPTZ(3) NOT NULL,
 
     CONSTRAINT "Bus_pkey" PRIMARY KEY ("id")
 );
@@ -29,8 +29,8 @@ CREATE TABLE "Shift" (
     "name" TEXT NOT NULL,
     "startTime" TEXT NOT NULL,
     "endTime" TEXT NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMPTZ(3) NOT NULL,
 
     CONSTRAINT "Shift_pkey" PRIMARY KEY ("id")
 );
@@ -42,8 +42,8 @@ CREATE TABLE "Route" (
     "name" TEXT NOT NULL,
     "color" TEXT NOT NULL,
     "active" BOOLEAN NOT NULL DEFAULT true,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMPTZ(3) NOT NULL,
 
     CONSTRAINT "Route_pkey" PRIMARY KEY ("id")
 );
@@ -58,8 +58,8 @@ CREATE TABLE "Stop" (
     "lat" DOUBLE PRECISION,
     "lng" DOUBLE PRECISION,
     "active" BOOLEAN NOT NULL DEFAULT true,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMPTZ(3) NOT NULL,
 
     CONSTRAINT "Stop_pkey" PRIMARY KEY ("id")
 );
@@ -77,12 +77,12 @@ CREATE TABLE "User" (
     "authProvider" TEXT NOT NULL DEFAULT 'LOCAL',
     "active" BOOLEAN NOT NULL DEFAULT true,
     "mustChangePassword" BOOLEAN NOT NULL DEFAULT false,
-    "bookingSuspendedUntil" TIMESTAMP(3),
+    "bookingSuspendedUntil" TIMESTAMPTZ(3),
     "suspendReason" TEXT,
     "failedLogins" INTEGER NOT NULL DEFAULT 0,
-    "lockedUntil" TIMESTAMP(3),
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "lockedUntil" TIMESTAMPTZ(3),
+    "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMPTZ(3) NOT NULL,
 
     CONSTRAINT "User_pkey" PRIMARY KEY ("id")
 );
@@ -98,8 +98,8 @@ CREATE TABLE "TripTemplate" (
     "dayOffset" INTEGER NOT NULL DEFAULT 0,
     "weekdays" INTEGER[],
     "active" BOOLEAN NOT NULL DEFAULT true,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMPTZ(3) NOT NULL,
 
     CONSTRAINT "TripTemplate_pkey" PRIMARY KEY ("id")
 );
@@ -109,7 +109,7 @@ CREATE TABLE "Trip" (
     "id" TEXT NOT NULL,
     "templateId" TEXT NOT NULL,
     "date" TEXT NOT NULL,
-    "departureAt" TIMESTAMP(3) NOT NULL,
+    "departureAt" TIMESTAMPTZ(3) NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'SCHEDULED',
     "bookedCount" INTEGER NOT NULL DEFAULT 0,
     "capacity" INTEGER NOT NULL,
@@ -117,8 +117,8 @@ CREATE TABLE "Trip" (
     "shiftId" TEXT NOT NULL,
     "direction" TEXT NOT NULL,
     "busId" TEXT NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMPTZ(3) NOT NULL,
 
     CONSTRAINT "Trip_pkey" PRIMARY KEY ("id")
 );
@@ -137,10 +137,10 @@ CREATE TABLE "Booking" (
     "source" TEXT NOT NULL DEFAULT 'DAILY',
     "subscriptionId" TEXT,
     "cancelReason" TEXT,
-    "cancelledAt" TIMESTAMP(3),
-    "reminderSentAt" TIMESTAMP(3),
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "cancelledAt" TIMESTAMPTZ(3),
+    "reminderSentAt" TIMESTAMPTZ(3),
+    "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMPTZ(3) NOT NULL,
 
     CONSTRAINT "Booking_pkey" PRIMARY KEY ("id")
 );
@@ -157,8 +157,8 @@ CREATE TABLE "Subscription" (
     "endDate" TEXT,
     "weekdays" INTEGER[],
     "status" TEXT NOT NULL DEFAULT 'ACTIVE',
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMPTZ(3) NOT NULL,
 
     CONSTRAINT "Subscription_pkey" PRIMARY KEY ("id")
 );
@@ -176,7 +176,7 @@ CREATE TABLE "RejectedRequest" (
     "reason" TEXT NOT NULL,
     "source" TEXT NOT NULL DEFAULT 'DAILY',
     "subscriptionId" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "RejectedRequest_pkey" PRIMARY KEY ("id")
 );
@@ -186,9 +186,9 @@ CREATE TABLE "RefreshToken" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "tokenHash" TEXT NOT NULL,
-    "expiresAt" TIMESTAMP(3) NOT NULL,
-    "revokedAt" TIMESTAMP(3),
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "expiresAt" TIMESTAMPTZ(3) NOT NULL,
+    "revokedAt" TIMESTAMPTZ(3),
+    "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "RefreshToken_pkey" PRIMARY KEY ("id")
 );
@@ -199,7 +199,7 @@ CREATE TABLE "DeviceToken" (
     "userId" TEXT NOT NULL,
     "token" TEXT NOT NULL,
     "platform" TEXT NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "DeviceToken_pkey" PRIMARY KEY ("id")
 );
@@ -212,8 +212,8 @@ CREATE TABLE "Notification" (
     "title" TEXT NOT NULL,
     "body" TEXT NOT NULL,
     "data" JSONB,
-    "readAt" TIMESTAMP(3),
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "readAt" TIMESTAMPTZ(3),
+    "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "Notification_pkey" PRIMARY KEY ("id")
 );
@@ -228,7 +228,7 @@ CREATE TABLE "AuditLog" (
     "entityId" TEXT NOT NULL,
     "before" JSONB,
     "after" JSONB,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "AuditLog_pkey" PRIMARY KEY ("id")
 );
@@ -238,7 +238,7 @@ CREATE TABLE "Setting" (
     "key" TEXT NOT NULL,
     "value" JSONB NOT NULL,
     "isSecret" BOOLEAN NOT NULL DEFAULT false,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "updatedAt" TIMESTAMPTZ(3) NOT NULL,
 
     CONSTRAINT "Setting_pkey" PRIMARY KEY ("key")
 );
@@ -249,7 +249,7 @@ CREATE TABLE "Backup" (
     "name" TEXT NOT NULL,
     "sizeBytes" INTEGER NOT NULL,
     "copiedToShare" BOOLEAN NOT NULL DEFAULT false,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "Backup_pkey" PRIMARY KEY ("id")
 );

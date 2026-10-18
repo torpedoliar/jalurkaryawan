@@ -5,6 +5,7 @@ const prisma = new PrismaClient();
 
 beforeAll(async () => {
   await prisma.$executeRawUnsafe('DELETE FROM "Booking"'); // clean slate; tables must exist
+  await prisma.$executeRawUnsafe(`DELETE FROM "Trip" WHERE id = 't1'`);
   // Minimal FK parents so raw inserts below test constraints, not foreign keys.
   // (Brief assumed FKs relaxed; Prisma enforces them, so seed parents verbatim-compatibly.)
   await prisma.$executeRaw`INSERT INTO "Vendor" (id, name, "createdAt", "updatedAt") VALUES ('v1','Vendor 1',now(),now()) ON CONFLICT (id) DO NOTHING`;
@@ -18,15 +19,11 @@ beforeAll(async () => {
 
 describe('schema constraints (spec §4)', () => {
   test('partial unique: second active booking same user/date/shift/direction violates', async () => {
-    const data = {
-      userId: 'u1', tripId: null as unknown as string, routeId: 'r1', stopId: 's1',
-      shiftId: 'pagi', direction: 'PICKUP', date: '2099-01-01', status: 'BOOKED', source: 'DAILY',
-    } as never;
     // tripId/foreign keys relaxed: constraint under test is the partial unique index itself
     await prisma.$executeRaw`INSERT INTO "Booking" (id, "userId", "routeId", "stopId", "shiftId", direction, date, status, source, "createdAt", "updatedAt") VALUES ('b1', 'u1', 'r1', 's1', 'pagi', 'PICKUP', '2099-01-01', 'BOOKED', 'DAILY', now(), now())`;
     await expect(
       prisma.$executeRaw`INSERT INTO "Booking" (id, "userId", "routeId", "stopId", "shiftId", direction, date, status, source, "createdAt", "updatedAt") VALUES ('b2', 'u1', 'r1', 's1', 'pagi', 'PICKUP', '2099-01-01', 'BOOKED', 'DAILY', now(), now())`,
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({ meta: { code: '23505' } });
     // a CANCELLED row is allowed (partial WHERE status='BOOKED')
     await prisma.$executeRaw`INSERT INTO "Booking" (id, "userId", "routeId", "stopId", "shiftId", direction, date, status, source, "createdAt", "updatedAt") VALUES ('b3', 'u1', 'r1', 's1', 'pagi', 'PICKUP', '2099-01-01', 'CANCELLED', 'DAILY', now(), now())`;
     await prisma.$executeRaw`DELETE FROM "Booking" WHERE id IN ('b1','b3')`;
