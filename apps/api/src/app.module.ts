@@ -4,9 +4,11 @@ import { HealthController } from './health.controller';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
 import { ResponseInterceptor } from './common/response.interceptor';
 import { MaintenanceGuard } from './common/guards/maintenance.guard';
+import { SettingsModule } from './settings/settings.module';
 
 @Module({
   controllers: [HealthController],
+  imports: [SettingsModule],
   providers: [
     MaintenanceGuard,
     { provide: APP_GUARD, useExisting: MaintenanceGuard },
