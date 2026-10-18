@@ -146,8 +146,11 @@ describe('templates + propagation (spec §5.6)', () => {
 
   // R1: update fills the window immediately (mock parity) — a re-added weekday regenerates its trips
   test('template update calls fillWindow: deleted unbooked future trips come back', async () => {
-    const tpl = await prisma.tripTemplate.findFirstOrThrow();
-    const victims = await prisma.trip.findMany({ where: { templateId: tpl.id, bookedCount: 0, bookings: { none: {} } } });
+    // only dates AFTER the booked trip: regenerating today's past trip at the new time could make it the
+    // earliest future trip and steal futureTrip() from later tests (clock-window flake)
+    const booked = await futureTrip();
+    const tpl = await prisma.tripTemplate.findUniqueOrThrow({ where: { id: booked.templateId } });
+    const victims = await prisma.trip.findMany({ where: { templateId: tpl.id, date: { gt: booked.date }, bookings: { none: {} } } });
     expect(victims.length).toBeGreaterThan(0);
     await prisma.trip.deleteMany({ where: { id: { in: victims.map((t) => t.id) } } });
     await templates.update(tpl.id, {
