@@ -1,8 +1,12 @@
 // apps/api/test/reports.test.ts — Task 10: availability + dashboard/occupancy/rejected/no-show + notifications list/read
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
+import { INestApplication } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
+import { JwtService } from '@nestjs/jwt';
 import { PrismaClient } from '@prisma/client';
 import { scryptSync } from 'node:crypto';
 import { jakartaDate, addDays, departureAt } from '@bms/shared';
+import { AppModule } from '../src/app.module';
 import { TripsService } from '../src/trips/trips.service';
 import { ReportsService } from '../src/reports/reports.service';
 import { NotificationsService } from '../src/notifications/notifications.service';
@@ -149,5 +153,52 @@ describe('notifications list/read', () => {
     const updated = await prisma.notification.findUnique({ where: { id: rows[0].id } });
     expect(updated!.readAt).toBeTruthy();
     await expect(reports.notificationRead('other', rows[0].id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+});
+
+// Fix round 1: mock parses date/from/to via IsoDate — garbage must be 400, not 500/empty-200.
+describe('report date query validation', () => {
+  let app: INestApplication;
+  let base: string;
+  let token: string;
+
+  beforeAll(async () => {
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    app = moduleRef.createNestApplication({ logger: false });
+    app.setGlobalPrefix('api'); // mirrors main.ts
+    await app.init();
+    await app.listen(0);
+    base = await app.getUrl();
+    const ga = await prisma.user.findFirstOrThrow({ where: { nik: 'GA1' } });
+    token = await new JwtService({ secret: process.env.APP_SECRET! }).signAsync({ sub: ga.id }, { expiresIn: '10m' });
+  });
+
+  afterAll(async () => { await app.close(); });
+
+  const get = (path: string) => fetch(`${base}${path}`, { headers: { authorization: `Bearer ${token}` } });
+  const expect400 = async (path: string, message: string) => {
+    const res = await get(path);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ code: 'VALIDATION_ERROR', message });
+  };
+
+  test('GET /api/reports/dashboard?date=abc → 400 date: Format tanggal YYYY-MM-DD', async () => {
+    await expect400('/api/reports/dashboard?date=abc', 'date: Format tanggal YYYY-MM-DD');
+  });
+
+  test('GET /api/reports/occupancy?from=abc → 400 from: Format tanggal YYYY-MM-DD', async () => {
+    await expect400('/api/reports/occupancy?from=abc', 'from: Format tanggal YYYY-MM-DD');
+  });
+
+  test('GET /api/reports/occupancy?to=abc → 400 to: Format tanggal YYYY-MM-DD', async () => {
+    await expect400('/api/reports/occupancy?to=abc', 'to: Format tanggal YYYY-MM-DD');
+  });
+
+  test('GET /api/reports/rejected?from=abc → 400 from: Format tanggal YYYY-MM-DD', async () => {
+    await expect400('/api/reports/rejected?from=abc', 'from: Format tanggal YYYY-MM-DD');
+  });
+
+  test('GET /api/reports/rejected?to=abc → 400 to: Format tanggal YYYY-MM-DD', async () => {
+    await expect400('/api/reports/rejected?to=abc', 'to: Format tanggal YYYY-MM-DD');
   });
 });
