@@ -8,10 +8,11 @@ import { SettingsModule } from './settings/settings.module';
 import { AuthModule } from './auth/auth.module';
 import { FleetModule } from './fleet/fleet.module';
 import { RoutesModule } from './routes/routes.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
   controllers: [HealthController],
-  imports: [SettingsModule, AuthModule, FleetModule, RoutesModule],
+  imports: [SettingsModule, AuthModule, FleetModule, RoutesModule, UsersModule],
   providers: [
     MaintenanceGuard,
     { provide: APP_GUARD, useExisting: MaintenanceGuard },
