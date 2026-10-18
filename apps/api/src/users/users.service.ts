@@ -3,7 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import { randomBytes } from 'node:crypto';
 import argon2 from 'argon2';
 import {
-  ADMIN_ROLES, ImportRow, jakartaDate, type UserInput, type UserSummary,
+  ADMIN_ROLES, ImportRow, jakartaDate, type ImportPreview, type TempPassword, type UserInput, type UserSummary,
 } from '@bms/shared';
 import { DomainError } from '../common/domain-error';
 import { toUserSummary } from '../common/mappers';
@@ -82,10 +82,6 @@ export class UsersService {
   async update(id: string, input: UserInput, actor: Actor): Promise<UserSummary> {
     const old = await this.prisma.user.findUnique({ where: { id } });
     if (!old) throw new DomainError('NOT_FOUND', 'Data tidak ditemukan.');
-    // brief test pins self-role message for a non-super caller; check before the admin-role guard
-    if (old.role !== input.role && id === actor.id) {
-      throw new DomainError('VALIDATION_ERROR', 'Tidak bisa mengubah role akun sendiri.');
-    }
     this.requireAdminRole(actor.role, old.role);
     this.requireAdminRole(actor.role, input.role);
     if (input.vendorId && !(await this.prisma.vendor.findUnique({ where: { id: input.vendorId } }))) {
@@ -93,6 +89,10 @@ export class UsersService {
     }
     const dup = await this.prisma.user.findUnique({ where: { nik: input.nik } });
     if (dup && dup.id !== id) throw new DomainError('VALIDATION_ERROR', `NIK ${input.nik} sudah terdaftar.`);
+    // mock order: admin-role guards → vendor → dup → self-role (GA self role-change is 403, not this)
+    if (old.role !== input.role && id === actor.id) {
+      throw new DomainError('VALIDATION_ERROR', 'Tidak bisa mengubah role akun sendiri.');
+    }
     const before = toUserSummary(old);
     const u = await this.prisma.user.update({
       where: { id },
@@ -140,41 +140,36 @@ export class UsersService {
 
   // ---- import ----------------------------------------------------------------
 
-  /** Spec 5.9 preview: Excel row numbers (header = row 1), numeric cells to string, NIK matched to existing users. */
-  async importPreview(rows: Record<string, unknown>[]): Promise<{
-    created: number; updated: number; errors: { row: number; nik: string; message: string }[];
-  }> {
-    const errors: { row: number; nik: string; message: string }[] = [];
+  /** Spec 5.9 preview (mock ImportPreview parity): row = index+2, numeric cells to string, ganda/non-karyawan errors. */
+  async importPreview(rows: Record<string, unknown>[]): Promise<ImportPreview> {
+    const out: ImportPreview = { created: [], updated: [], errors: [] };
     const seen = new Set<string>();
-    let created = 0;
-    let updated = 0;
     for (let i = 0; i < rows.length; i++) {
       const row = i + 2; // header is row 1
       const cells = coerceCells(rows[i]);
       const parsed = ImportRow.safeParse(cells);
       if (!parsed.success) {
-        errors.push({ row, nik: typeof cells.nik === 'string' ? cells.nik : '', message: zodMessage(parsed.error.issues[0]!) });
+        out.errors.push({ row, message: zodMessage(parsed.error.issues[0]!) });
         continue;
       }
       const r = parsed.data;
       if (seen.has(r.nik)) {
-        errors.push({ row, nik: r.nik, message: `NIK ${r.nik} ganda di file` });
+        out.errors.push({ row, message: `NIK ${r.nik} ganda di file` });
         continue;
       }
       seen.add(r.nik);
       const existing = await this.prisma.user.findUnique({ where: { nik: r.nik } });
       if (existing && existing.role !== 'EMPLOYEE') {
-        errors.push({ row, nik: r.nik, message: `NIK ${r.nik} milik akun non-karyawan` });
+        out.errors.push({ row, message: `NIK ${r.nik} milik akun non-karyawan` });
         continue;
       }
-      if (existing) updated++;
-      else created++;
+      (existing ? out.updated : out.created).push(r);
     }
-    return { created, updated, errors };
+    return out;
   }
 
-  async importCommit(rows: Record<string, unknown>[], actor: { id: string | null; name: string }): Promise<{ passwords: Record<string, string> }> {
-    const passwords: Record<string, string> = {};
+  async importCommit(rows: Record<string, unknown>[], actor: { id: string | null; name: string }): Promise<{ passwords: TempPassword[] }> {
+    const passwords: TempPassword[] = [];
     const summary = { created: 0, updated: 0 };
     await this.prisma.$transaction(async (tx) => {
       const seen = new Set<string>();
@@ -189,13 +184,13 @@ export class UsersService {
           summary.updated++;
         } else if (!existing) {
           const pw = tempPassword();
-          passwords[r.nik] = pw;
-          await tx.user.create({
+          const row = await tx.user.create({
             data: {
               nik: r.nik, name: r.name, department: r.department, phone: r.phone, role: 'EMPLOYEE',
               passwordHash: await argon2.hash(pw), mustChangePassword: true, active: true,
             },
           });
+          passwords.push({ userId: row.id, nik: row.nik, tempPassword: pw });
           summary.created++;
         }
       }

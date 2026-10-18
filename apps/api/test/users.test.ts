@@ -40,9 +40,9 @@ describe('users create/update', () => {
       .rejects.toMatchObject({ code: 'FORBIDDEN', message: 'Hanya Super Admin yang boleh mengelola akun admin.' });
   });
 
-  test('self role change → "Tidak bisa mengubah role akun sendiri."', async () => {
+  test('GA self role change → admin-role guard 403 (mock order: guards before self-role)', async () => {
     await expect(users.update('ga1', { nik: 'GA1', name: 'GA', department: '', phone: '', role: 'SUPER_ADMIN', vendorId: null }, actorGa))
-      .rejects.toThrow('Tidak bisa mengubah role akun sendiri.');
+      .rejects.toMatchObject({ code: 'FORBIDDEN', message: 'Hanya Super Admin yang boleh mengelola akun admin.' });
   });
 
   test('create returns tempPassword, mustChange true', async () => {
@@ -83,21 +83,25 @@ describe('import', () => {
       { nik: 'K102', name: 'Dup2', department: '', phone: '' }, // ganda di file
     ];
     const p = await users.importPreview(rows);
-    // brief pinned `row===2 && e.nik==='123'` as error; mock coerces numbers before zod (wire parity),
-    // so "123" is a valid created row — the coercion is asserted via created/updated counts instead.
-    expect(p.errors.some((e) => e.nik === 'K201' && /non-karyawan/.test(e.message))).toBe(true);
-    expect(p.errors.some((e) => e.nik === 'K102' && /ganda/.test(e.message))).toBe(true);
-    expect(p.updated).toBe(2); // K200 + K102 (K102 exists from the create test above)
-    expect(p.created).toBe(1); // 123 (numeric coerced to "123")
+    // mock ImportPreview parity: created/updated are ImportRow arrays, errors are {row,message} (no nik)
+    expect(p.created.map((r) => r.nik)).toEqual(['123']); // numeric 123 coerced to "123"
+    expect(p.updated.map((r) => r.nik).sort()).toEqual(['K102', 'K200']); // K102 exists from the create test
+    expect(p.errors.some((e) => e.row === 4 && /K201/.test(e.message) && /non-karyawan/.test(e.message))).toBe(true);
+    expect(p.errors.some((e) => e.row === 6 && /K102/.test(e.message) && /ganda/.test(e.message))).toBe(true);
   });
 
-  test('commit: one tx, updates+creates, returns passwords map', async () => {
+  test('commit: one tx, updates+creates, returns passwords array (TempPassword[])', async () => {
     const rows = [
       { nik: '123', name: 'Num', department: 'QC', phone: '' },
       { nik: 'K200', name: 'Updated2', department: 'Gudang', phone: '0812' },
     ];
     const r = await users.importCommit(rows, actorSuper);
-    expect(Object.keys(r.passwords)).toEqual(expect.arrayContaining(['123']));
+    const made = r.passwords.find((x) => x.nik === '123');
+    expect(made).toMatchObject({
+      userId: expect.any(String),
+      nik: '123',
+      tempPassword: expect.stringMatching(/^[abcdefghjkmnpqrstuvwxyz23456789]{10}$/),
+    });
     const k200 = await prisma.user.findUnique({ where: { nik: 'K200' } });
     expect(k200!.name).toBe('Updated2');
   });
