@@ -1,11 +1,15 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Query, Req, UsePipes } from '@nestjs/common';
-import { CancelDateRequest, TripTemplateInput } from '@bms/shared';
+import { z } from 'zod';
+import { CancelDateRequest, Direction, Id, IsoDate, TripTemplateInput } from '@bms/shared';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { ZodPipe } from '../common/zod-body.pipe';
 import { TemplatesService } from './templates.service';
 import { TripsService } from './trips.service';
 
 type ActorReq = { user: { id: string | null; name: string; role: string } | null };
+
+/** Mock handlers/trips.ts local schema parity (shared has no AvailabilityQuery export). */
+const AvailabilityQuery = z.object({ routeId: Id, shiftId: Id, direction: Direction, date: IsoDate });
 
 /** Paths mirror ENDPOINTS: /trip-templates, /trips, /departures. */
 @Controller()
@@ -27,6 +31,12 @@ export class TripsController {
   @Get('trips') @Roles('SUPER_ADMIN', 'ADMIN_GA') // mock trips.ts gates with ADMIN_ROLES
   listTrips(@Query('date') date?: string, @Query('routeId') routeId?: string, @Query('shiftId') shiftId?: string) {
     return this.trips.list({ date, routeId, shiftId });
+  }
+
+  // ANY logged-in user (mock requireUser only); declared above :id routes so it can never be captured as one.
+  @Get('availability')
+  availability(@Query(new ZodPipe(AvailabilityQuery)) q: z.infer<typeof AvailabilityQuery>) {
+    return this.trips.availability(q.routeId, q.shiftId, q.direction, q.date);
   }
 
   @Get('departures') // ANY logged-in user

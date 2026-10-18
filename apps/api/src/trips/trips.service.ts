@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
-import { jakartaDate, stopTime, toJakartaIso, type Direction, type TripStatus } from '@bms/shared';
+import { jakartaDate, stopTime, toJakartaIso, cutoffAt, isPastCutoff, type Availability, type Direction, type TripStatus } from '@bms/shared';
 import { DomainError } from '../common/domain-error';
 import { toDeparture, toPassenger } from '../common/mappers';
 import { AuditService } from '../audit/audit.service';
@@ -107,6 +107,24 @@ export class TripsService {
     });
     for (const t of trips) await this.tripCancel(t.id, actor);
     return { cancelled: trips.length };
+  }
+
+  /** mock GET /api/availability wire: seats for one combo; bookable = some open pre-cutoff trip. */
+  async availability(routeId: string, shiftId: string, direction: Direction, date: string): Promise<Availability> {
+    const trips = await this.prisma.trip.findMany({
+      where: { routeId, shiftId, direction, date, status: 'SCHEDULED' },
+      orderBy: { departureAt: 'asc' },
+    });
+    const min = this.settings.get().booking_cutoff_minutes;
+    const first = trips[0] ? toJakartaIso(trips[0].departureAt.getTime()) : null;
+    return {
+      routeId, shiftId, direction, date,
+      capacity: trips.reduce((s, t) => s + t.capacity, 0),
+      bookedCount: trips.reduce((s, t) => s + t.bookedCount, 0),
+      firstDepartureAt: first,
+      cutoffAt: first ? cutoffAt(first, min) : null,
+      bookable: trips.some((t) => t.bookedCount < t.capacity && !isPastCutoff(toJakartaIso(t.departureAt.getTime()), min, new Date())),
+    };
   }
 
   /** departures board (ANY user): date's trips as contract `Departure` + mine flag for caller. */

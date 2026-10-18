@@ -13,10 +13,11 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { TripsModule } from './trips/trips.module';
 import { BookingsModule } from './bookings/bookings.module';
 import { AdminModule } from './admin/admin.module';
+import { ReportsModule } from './reports/reports.module';
 
 @Module({
   controllers: [HealthController],
-  imports: [SettingsModule, AuthModule, NotificationsModule, FleetModule, RoutesModule, UsersModule, TripsModule, BookingsModule, AdminModule],
+  imports: [SettingsModule, AuthModule, NotificationsModule, FleetModule, RoutesModule, UsersModule, TripsModule, BookingsModule, AdminModule, ReportsModule],
   providers: [
     MaintenanceGuard,
     { provide: APP_GUARD, useExisting: MaintenanceGuard },
