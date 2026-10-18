@@ -147,4 +147,35 @@ describe('cancelBooking', () => {
     const b = await prisma.booking.findFirstOrThrow({ where: { userId: u.id, status: 'CANCELLED' } });
     await expect(bookings.cancelBooking(b.id, u.id)).rejects.toThrow('Booking sudah tidak aktif.');
   });
+
+  test('second cancel of same booking rejected; bookedCount decremented exactly once', async () => {
+    const u = await prisma.user.findFirstOrThrow({ where: { nik: 'FILL1' } });
+    const b = await prisma.booking.findFirstOrThrow({ where: { userId: u.id, status: 'BOOKED' } });
+    const before = (await prisma.trip.findUnique({ where: { id: tripId } }))!.bookedCount;
+    await bookings.cancelBooking(b.id, u.id);
+    const mid = (await prisma.trip.findUnique({ where: { id: tripId } }))!.bookedCount;
+    expect(mid).toBe(before - 1);
+    // second cancel: rejected, and the seat is NOT freed again (never goes negative)
+    await expect(bookings.cancelBooking(b.id, u.id)).rejects.toThrow('Booking sudah tidak aktif.');
+    const after = (await prisma.trip.findUnique({ where: { id: tripId } }))!.bookedCount;
+    expect(after).toBe(mid);
+    expect(after).toBeGreaterThanOrEqual(0);
+  });
+
+  test('concurrent cancels of same booking: exactly one decrement', async () => {
+    const u = await prisma.user.findFirstOrThrow({ where: { nik: 'K1001' } });
+    const b = await prisma.booking.findFirstOrThrow({ where: { userId: u.id, status: 'BOOKED' } });
+    const before = (await prisma.trip.findUnique({ where: { id: tripId } }))!.bookedCount;
+    const results = await Promise.allSettled([
+      bookings.cancelBooking(b.id, u.id),
+      bookings.cancelBooking(b.id, u.id),
+    ]);
+    const ok = results.filter((r) => r.status === 'fulfilled').length;
+    const inactive = results.filter((r) => r.status === 'rejected' && (r.reason as Error).message === 'Booking sudah tidak aktif.').length;
+    expect(ok).toBe(1);
+    expect(inactive).toBe(1);
+    const after = (await prisma.trip.findUnique({ where: { id: tripId } }))!.bookedCount;
+    expect(after).toBe(before - 1);
+    expect(after).toBeGreaterThanOrEqual(0);
+  });
 });

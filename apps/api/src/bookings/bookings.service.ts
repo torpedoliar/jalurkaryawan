@@ -47,13 +47,19 @@ export class BookingsService {
     if (trip && isPastCutoff(trip.departureAt.toISOString(), this.settings.get().booking_cutoff_minutes, new Date())) {
       throw new DomainError('CUTOFF_PASSED', ERROR_MESSAGES.CUTOFF_PASSED);
     }
-    await this.prisma.$transaction([
-      this.prisma.booking.update({
-        where: { id: bookingId },
+    // conditional flip + decrement in one tx (allocation's pattern): only the flip winner decrements,
+    // so concurrent cancels cannot free the same seat twice
+    await this.prisma.$transaction(async (tx) => {
+      const flipped = await tx.booking.updateMany({
+        where: { id: bookingId, status: 'BOOKED' },
         data: { status: 'CANCELLED', cancelReason: 'USER', cancelledAt: new Date() },
-      }),
-      ...(trip ? [this.prisma.trip.update({ where: { id: trip.id }, data: { bookedCount: { decrement: 1 } } })] : []),
-    ]);
+      });
+      if (flipped.count === 0) {
+        // lost the race / already cancelled — mock: non-BOOKED cancel = "Booking sudah tidak aktif."
+        throw new DomainError('VALIDATION_ERROR', 'Booking sudah tidak aktif.');
+      }
+      if (trip) await tx.trip.update({ where: { id: trip.id }, data: { bookedCount: { decrement: 1 } } });
+    });
     return this.view(bookingId); // mock cancel returns full toBooking row
   }
 
