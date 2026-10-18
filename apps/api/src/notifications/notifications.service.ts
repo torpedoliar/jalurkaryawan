@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, PrismaClient } from '@prisma/client';
 import type { NotificationType } from '@bms/shared';
+import { toJakartaIso } from '@bms/shared';
 import { FcmService } from './fcm.service';
 import { SettingsService } from '../settings/settings.service';
 
@@ -69,7 +70,7 @@ export class NotificationsService {
     });
     for (const b of bookings) {
       const title = 'Pengingat booking';
-      const body = `Bus kamu berangkat ${b.date} pukul ${b.trip!.departureAt.toISOString().slice(11, 16)} dari ${b.stop.name}.`;
+      const body = `Bus kamu berangkat ${b.date} pukul ${toJakartaIso(b.trip!.departureAt.getTime()).slice(11, 16)} dari ${b.stop.name}.`;
       await this.sendToUser(b.userId, 'REMINDER', title, body, { bookingId: b.id, tripId: b.tripId ?? '' });
       await this.prisma.booking.update({ where: { id: b.id }, data: { reminderSentAt: new Date() } });
     }

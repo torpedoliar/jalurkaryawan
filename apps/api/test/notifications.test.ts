@@ -2,7 +2,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import { PrismaClient } from '@prisma/client';
 import { scryptSync } from 'node:crypto';
-import { jakartaDate } from '@bms/shared';
+import { jakartaDate, toJakartaIso } from '@bms/shared';
 import { NotificationsService } from '../src/notifications/notifications.service';
 import { FcmService } from '../src/notifications/fcm.service';
 import { SettingsService } from '../src/settings/settings.service';
@@ -75,6 +75,17 @@ describe('reminder candidates', () => {
     expect(n).toBeTruthy();
     const b = await prisma.booking.findFirstOrThrow({ where: { tripId } });
     expect(b.reminderSentAt).toBeTruthy();
+  });
+
+  // WIB = UTC+7 always, so body hour must come from toJakartaIso — toISOString is always wrong
+  test('reminder body uses Asia/Jakarta hour, not UTC', async () => {
+    const trip = await prisma.trip.findFirstOrThrow({ where: { id: tripId } });
+    const wib = toJakartaIso(trip.departureAt.getTime()).slice(11, 16);
+    const utc = trip.departureAt.toISOString().slice(11, 16);
+    expect(wib).not.toBe(utc); // fixture sanity: 7h offset makes the two hours differ
+    const n = await prisma.notification.findFirstOrThrow({ where: { userId, type: 'REMINDER' } });
+    expect(n.body).toContain(wib);
+    expect(n.body).not.toContain(utc);
   });
 
   test('idempotent: second run does not duplicate reminder', async () => {
