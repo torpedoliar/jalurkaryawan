@@ -21,6 +21,12 @@ export class BookingsController {
     return this.bookings.myBookings(r.user.id, from, to);
   }
 
+  @Get('users/:id/bookings')
+  @Roles('SUPER_ADMIN', 'ADMIN_GA') // method-level overrides the class EMPLOYEE gate
+  userBookings(@Param('id') id: string) {
+    return this.bookings.userBookings(id);
+  }
+
   @Post('bookings')
   @UsePipes(new ZodPipe(DailyBookingRequest))
   book(@Req() r: EmpReq, @Body() b: { routeId: string; stopId: string; shiftId: string; direction: 'PICKUP' | 'DROPOFF'; date: string }) {

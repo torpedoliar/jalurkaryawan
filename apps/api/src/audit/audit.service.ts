@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, PrismaClient } from '@prisma/client';
-import { SECRET_SETTING_KEYS } from '@bms/shared';
+import { SECRET_SETTING_KEYS, toJakartaIso, type AuditLog } from '@bms/shared';
 
 export interface AuditInput {
   actorId?: string | null;
@@ -57,6 +57,12 @@ export class AuditService {
         where, orderBy: { createdAt: 'desc' }, skip: (page - 1) * pageSize, take: pageSize,
       }),
     ]);
-    return { items: rows.map((r) => ({ ...r, before: r.before ?? null, after: r.after ?? null })), total, page, pageSize };
+    // shared AuditLog: actorId is Id (non-null) → cron/system rows map to 'system'; createdAt Jakarta ISO
+    const items: AuditLog[] = rows.map((r) => ({
+      id: r.id, actorId: r.actorId ?? 'system', actorName: r.actorName, action: r.action,
+      entity: r.entity, entityId: r.entityId, before: r.before ?? null, after: r.after ?? null,
+      createdAt: toJakartaIso(r.createdAt.getTime()),
+    }));
+    return { items, total, page, pageSize };
   }
 }

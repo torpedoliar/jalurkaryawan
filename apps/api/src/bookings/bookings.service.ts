@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
-import { ERROR_MESSAGES, isPastCutoff } from '@bms/shared';
+import { ERROR_MESSAGES, isPastCutoff, toJakartaIso } from '@bms/shared';
 import { DomainError } from '../common/domain-error';
 import { toBooking } from '../common/mappers';
 import { SettingsService } from '../settings/settings.service';
@@ -34,6 +34,17 @@ export class BookingsService {
       },
       include: bookingInclude,
       orderBy: [{ trip: { departureAt: 'asc' } }],
+    });
+    return rows.map((b) => this.toView(b));
+  }
+
+  /** mock GET /api/users/:id/bookings: unknown user → NOT_FOUND; date desc, createdAt desc. */
+  async userBookings(userId: string) {
+    if (!(await this.prisma.user.findUnique({ where: { id: userId } }))) throw new DomainError('NOT_FOUND', ERROR_MESSAGES.NOT_FOUND);
+    const rows = await this.prisma.booking.findMany({
+      where: { userId },
+      include: bookingInclude,
+      orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
     });
     return rows.map((b) => this.toView(b));
   }
@@ -77,7 +88,7 @@ export class BookingsService {
     return toBooking(b, {
       routeCode: b.route.code, routeName: b.route.name, routeColor: b.route.color,
       stopName: b.stop.name, busPlate: b.trip?.bus.plate ?? '',
-      departureAt: b.trip?.departureAt.toISOString() ?? '',
+      departureAt: b.trip ? toJakartaIso(b.trip.departureAt.getTime()) : '',
       direction: b.direction as 'PICKUP' | 'DROPOFF',
       stopOffset: b.stop.offsetMinutes, maxStopOffset: maxOffset,
       cutoffMinutes: this.settings.get().booking_cutoff_minutes,
