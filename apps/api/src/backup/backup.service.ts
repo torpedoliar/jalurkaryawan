@@ -51,6 +51,7 @@ export class BackupService {
     const r = await this.exec.exec('pg_dump', ['-Fc', '-f', outPath, this.conn()]);
     if (r.code !== 0) {
       this.logger.error(`pg_dump failed: ${r.stderr}`);
+      try { unlinkSync(outPath); } catch { /* best-effort: drop partial dump */ }
       throw new Error(`pg_dump failed: ${r.stderr}`);
     }
     let copiedToShare = false;
@@ -133,6 +134,7 @@ export class BackupService {
   /** Spec §5.11 restore. Review Focus: pg_restore --list validates BEFORE anything touches data. */
   async restore(input: RestoreRequest, actor: { id: string | null; name: string }): Promise<{ preRestore: BackupFile }> {
     if (input.confirm !== 'RESTORE') throw new DomainError('VALIDATION_ERROR', ERROR_MESSAGES.VALIDATION_ERROR);
+    // ops: set RESTORE_PASSWORD via deployment env, not .env
     const expected = process.env.RESTORE_PASSWORD ?? '';
     if (!expected || input.password !== expected) throw new DomainError('VALIDATION_ERROR', 'Password salah.');
     const name = basename(input.fileName);
@@ -149,22 +151,26 @@ export class BackupService {
     const preRestore = `pre-restore-${this.stamp()}.dump`;
     const prePath = join(this.backupDir, preRestore);
     const pre = await this.exec.exec('pg_dump', ['-Fc', '-f', prePath, this.conn()]);
-    if (pre.code !== 0) throw new Error(`pg_dump pre-restore failed: ${pre.stderr}`);
+    if (pre.code !== 0) {
+      try { unlinkSync(prePath); } catch { /* best-effort: drop partial dump */ }
+      throw new Error(`pg_dump pre-restore failed: ${pre.stderr}`);
+    }
 
-    // step 3: maintenance mode + stop cron jobs
+    // step 3: maintenance mode + stop cron jobs (pauseAll inside the try: a throw must not strand the guard)
     MaintenanceGuard.enabled = true;
-    this.scheduler.pauseAll();
     try {
+      this.scheduler.pauseAll();
       // step 4: destructive restore in one transaction
       const r = await this.exec.exec('pg_restore', ['--clean', '--if-exists', '--single-transaction', '-d', this.conn(), src]);
       if (r.code !== 0) throw new DomainError('VALIDATION_ERROR', `Restore gagal: ${r.stderr}`);
-      // step 5: re-apply migrations on the restored schema
-      await this.exec.exec('npx', ['prisma', 'migrate', 'deploy']);
+      // step 5: re-apply migrations on the restored schema — a failed deploy must not fall through to success
+      const m = await this.exec.exec('npx', ['prisma', 'migrate', 'deploy']);
+      if (m.code !== 0) throw new DomainError('VALIDATION_ERROR', `Restore gagal: ${m.stderr}`);
       // step 6: reload settings cache + revoke every refresh token (everyone re-logins)
       await this.settings.init();
       await this.prisma.refreshToken.updateMany({ where: { revokedAt: null }, data: { revokedAt: new Date() } });
     } finally {
-      this.scheduler.resumeAll();
+      try { this.scheduler.resumeAll(); } catch { /* job never registered */ }
       MaintenanceGuard.enabled = false;
     }
     // step 7: record the snapshot + audit INTO the restored DB

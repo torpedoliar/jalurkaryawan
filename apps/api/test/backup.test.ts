@@ -191,4 +191,46 @@ describe('restore success path', () => {
     expect(calls.some((c) => c[0] === 'npx' && c.includes('migrate'))).toBe(true);
     rmSync(BACKUP_DIR, { recursive: true, force: true });
   });
+
+  // fix round 1: a failed migrate deploy must not fall through to success (silent schema drift)
+  test('migrate deploy failure → throws "Restore gagal:", maintenance cleared via finally', async () => {
+    mkdirSync(BACKUP_DIR, { recursive: true });
+    writeFileSync(join(BACKUP_DIR, 'migfail.dump'), Buffer.from('PGDMPok'));
+    process.env.RESTORE_PASSWORD = 'correct';
+    const runner = {
+      exec: async (cmd: string, args: string[]) => {
+        if (cmd === 'pg_dump') {
+          const outIdx = args.findIndex((a) => a === '-f' || a === '--file');
+          writeFileSync(args[outIdx + 1]!, Buffer.from('PGDMPfake'));
+        }
+        if (cmd === 'npx' && args.includes('migrate')) return { stdout: '', stderr: 'migration failed', code: 1 };
+        return { stdout: '', stderr: '', code: 0 };
+      },
+    } as ExecRunnerService;
+    const spy = { pauseAll: () => {}, resumeAll: () => {} } as SchedulerService;
+    const svc = new BackupService(prisma, runner, settings, new AuditService(prisma), spy, BACKUP_DIR);
+    await expect(svc.restore({ fileName: 'migfail.dump', password: 'correct', confirm: 'RESTORE' } as never, { id: null, name: 'Tester' }))
+      .rejects.toThrow('Restore gagal: migration failed');
+    expect(MaintenanceGuard.enabled).toBe(false);
+    rmSync(BACKUP_DIR, { recursive: true, force: true });
+  });
+
+  // fix round 1 minor 2: pauseAll throwing inside the try must not strand the maintenance guard
+  test('pauseAll throwing → restore rejects, maintenance still cleared', async () => {
+    mkdirSync(BACKUP_DIR, { recursive: true });
+    writeFileSync(join(BACKUP_DIR, 'pausefail.dump'), Buffer.from('PGDMPok'));
+    process.env.RESTORE_PASSWORD = 'correct';
+    let resumed = 0;
+    const runner = { exec: async () => ({ stdout: '', stderr: '', code: 0 }) } as ExecRunnerService;
+    const spy = {
+      pauseAll: (): void => { throw new Error('cron missing'); },
+      resumeAll: () => { resumed++; },
+    } as SchedulerService;
+    const svc = new BackupService(prisma, runner, settings, new AuditService(prisma), spy, BACKUP_DIR);
+    await expect(svc.restore({ fileName: 'pausefail.dump', password: 'correct', confirm: 'RESTORE' } as never, { id: null, name: 'Tester' }))
+      .rejects.toThrow('cron missing');
+    expect(MaintenanceGuard.enabled).toBe(false);
+    expect(resumed).toBe(1); // finally still attempted resume
+    rmSync(BACKUP_DIR, { recursive: true, force: true });
+  });
 });
