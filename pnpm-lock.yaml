@@ -41,6 +41,9 @@ importers:
       argon2:
         specifier: 0.41.1
         version: 0.41.1
+      cron:
+        specifier: 4.3.0
+        version: 4.3.0
       google-auth-library:
         specifier: 9.15.0
         version: 9.15.0

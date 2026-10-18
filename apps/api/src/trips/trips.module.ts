@@ -9,5 +9,6 @@ import { AllocateService } from '../bookings/allocate.service';
 @Module({
   controllers: [TripsController],
   providers: [TemplatesService, TripsService, GenerateService, AllocateService, PrismaClient],
+  exports: [GenerateService],
 })
 export class TripsModule {}

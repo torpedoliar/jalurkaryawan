@@ -56,6 +56,17 @@ export class GenerateService {
     return total;
   }
 
+  /** Startup + nightly: generate trips + subscription bookings for the full window. Idempotent. */
+  async runGenerate(): Promise<void> {
+    const daysAhead = this.settings.get().generate_days_ahead;
+    const today = jakartaDate(new Date());
+    for (let i = 0; i <= daysAhead; i++) {
+      const date = addDays(today, i);
+      await this.generateTrips(date);
+      await this.generateSubscriptionBookings(date);
+    }
+  }
+
   /** spec §5.2: generate SUBSCRIPTION-source bookings for one date. Idempotent via 4 skip rules. */
   async generateSubscriptionBookings(date: string): Promise<void> {
     const subs = await this.prisma.subscription.findMany({
