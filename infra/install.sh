@@ -23,4 +23,4 @@ fi
 
 echo "next steps:"
 echo "  docker compose up -d --build"
-echo "  docker compose exec api npx tsx prisma/seed.ts   # only for fresh dev DB"
+echo "  docker compose exec api npx tsx prisma/seed.ts   # dev demo data, fresh DB only; WIPES ALL DATA, refuses if a Super Admin exists (add --force to re-seed)"

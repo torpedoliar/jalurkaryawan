@@ -40,6 +40,12 @@ const hhmm = (h: number, m: number) => `${String(h).padStart(2, '0')}:${String(m
 const prisma = new PrismaClient();
 
 async function main() {
+  // Guard: the reset below wipes EVERY table — refuse on a DB that already has a Super Admin.
+  if (!process.argv.includes('--force') && (await prisma.user.findFirst({ where: { role: 'SUPER_ADMIN' } }))) {
+    console.error('seed dibatalkan: database sudah punya SUPER_ADMIN. Seed menghapus SEMUA data; jalankan ulang dengan --force jika memang ingin reset.');
+    process.exitCode = 1;
+    return;
+  }
   // Children before parents (no ON DELETE CASCADE in schema).
   await prisma.$transaction([
     prisma.notification.deleteMany(), prisma.rejectedRequest.deleteMany(), prisma.booking.deleteMany(),
