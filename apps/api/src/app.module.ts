@@ -6,10 +6,12 @@ import { ResponseInterceptor } from './common/response.interceptor';
 import { MaintenanceGuard } from './common/guards/maintenance.guard';
 import { SettingsModule } from './settings/settings.module';
 import { AuthModule } from './auth/auth.module';
+import { FleetModule } from './fleet/fleet.module';
+import { RoutesModule } from './routes/routes.module';
 
 @Module({
   controllers: [HealthController],
-  imports: [SettingsModule, AuthModule],
+  imports: [SettingsModule, AuthModule, FleetModule, RoutesModule],
   providers: [
     MaintenanceGuard,
     { provide: APP_GUARD, useExisting: MaintenanceGuard },
