@@ -78,6 +78,9 @@ importers:
       prisma:
         specifier: 6.2.1
         version: 6.2.1
+      ts-loader:
+        specifier: 9.5.2
+        version: 9.5.2(typescript@5.6.3)(webpack@5.97.1(@swc/core@1.10.1)(lightningcss@1.33.0))
       tsx:
         specifier: 4.19.2
         version: 4.19.2
@@ -5343,6 +5346,13 @@ packages:
   tree-kill@1.2.2:
     resolution: {integrity: sha512-L0Orpi8qGpRG//Nd+H90vFB+3iHnue1zSSGmNOOCh1GLJ7rUKVwV2HvijphGQS2UmhUZewS9VgvxYIdgr+fG1A==}
     hasBin: true
+
+  ts-loader@9.5.2:
+    resolution: {integrity: sha512-Qo4piXvOTWcMGIgRiuFa6nHNm+54HbYaZCKqc9eeZCLRy3XqafQgwX2F7mofrbJG3g7EEb+lkiR+z2Lic2s3Zw==}
+    engines: {node: '>=12.0.0'}
+    peerDependencies:
+      typescript: '*'
+      webpack: ^5.0.0
 
   tsconfig-paths-webpack-plugin@4.2.0:
     resolution: {integrity: sha512-zbem3rfRS8BgeNK50Zz5SIQgXzLafiHjOwUAvk/38/o1jHn/V5QAgVUcz884or7WYcPaH3N2CIfUc2u0ul7UcA==}
@@ -11841,6 +11851,16 @@ snapshots:
       punycode: 2.3.1
 
   tree-kill@1.2.2: {}
+
+  ts-loader@9.5.2(typescript@5.6.3)(webpack@5.97.1(@swc/core@1.10.1)(lightningcss@1.33.0)):
+    dependencies:
+      chalk: 4.1.2
+      enhanced-resolve: 5.26.0
+      micromatch: 4.0.8
+      semver: 7.8.5
+      source-map: 0.7.4
+      typescript: 5.6.3
+      webpack: 5.97.1(@swc/core@1.10.1)(lightningcss@1.33.0)
 
   tsconfig-paths-webpack-plugin@4.2.0:
     dependencies:
