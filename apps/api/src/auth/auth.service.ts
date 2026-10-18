@@ -159,7 +159,7 @@ export class AuthService {
     return {
       id: u.id, nik: u.nik, name: u.name, role: u.role as Me['role'], vendorId: u.vendorId,
       mustChangePassword: u.mustChangePassword,
-      bookingSuspendedUntil: expired ? null : u.bookingSuspendedUntil?.toISOString() ?? null,
+      bookingSuspendedUntil: expired || !u.bookingSuspendedUntil ? null : jakartaDate(u.bookingSuspendedUntil), // IsoDate, Jakarta calendar day
       suspendReason: expired ? null : u.suspendReason,
     };
   }

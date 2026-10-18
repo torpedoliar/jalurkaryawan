@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Req, Res, UploadedFile, UseInterceptors, UsePipes } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Req, Res, StreamableFile, UploadedFile, UseInterceptors, UsePipes } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { RestoreRequest } from '@bms/shared';
 import { basename } from 'node:path';
@@ -20,24 +20,26 @@ export class BackupController {
     return this.backup.list();
   }
 
+  // passthrough + StreamableFile: a raw @Res() pipe returns undefined → interceptor forces 204 empty body
   @Get(':name/download')
-  async download(@Param('name') name: string, @Res() res: Response) {
+  download(@Param('name') name: string, @Res({ passthrough: true }) res: Response) {
     const file = basename(name);
+    const stream = this.backup.downloadStream(file);
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${file}"`);
-    this.backup.downloadStream(file).pipe(res);
+    return new StreamableFile(stream as import('node:stream').Readable);
   }
 
   /** Mock ENDPOINTS.backupRun: manual "Backup sekarang". */
   @Post('run')
-  run() {
-    return this.backup.runBackup();
+  run(@Req() req: ActorReq) {
+    return this.backup.runBackup(req.user);
   }
 
   @Post('upload')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 100 * 1024 * 1024 } }))
-  upload(@UploadedFile() file?: Express.Multer.File) {
-    return this.backup.upload(file);
+  upload(@Req() req: ActorReq, @UploadedFile() file?: Express.Multer.File) {
+    return this.backup.upload(file, req.user);
   }
 
   @Post('restore')

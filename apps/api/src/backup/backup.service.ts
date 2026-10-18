@@ -1,6 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional, forwardRef } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
-import { BackupFile, ERROR_MESSAGES, RestoreRequest } from '@bms/shared';
+import argon2 from 'argon2';
+import { BackupFile, ERROR_MESSAGES, RestoreRequest, toJakartaIso } from '@bms/shared';
 import { createReadStream, existsSync, mkdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { DomainError } from '../common/domain-error';
@@ -11,20 +12,22 @@ import { SchedulerService } from '../scheduler/scheduler.service';
 import { ExecRunnerService } from './exec-runner.service';
 
 const BACKUP_DIR_DEFAULT = '/backups';
+type Actor = { id: string | null; name: string };
+const SYSTEM: Actor = { id: null, name: 'system' }; // cron path
 
 @Injectable()
 export class BackupService {
   private readonly logger = new Logger(BackupService.name);
 
-  // backupDir last + defaultable: tests pass a fake dir positionally; Nest builds this via
-  // a useFactory in SchedulerModule (breaks the SchedulerService<->BackupService cycle).
+  // backupDir last + @Optional: tests pass a fake dir positionally; Nest injects undefined → default.
+  // forwardRef: SchedulerService injects this (BACKUP_JOB) and restore pauses/resumes it.
   constructor(
     private readonly prisma: PrismaClient,
     private readonly exec: ExecRunnerService,
     private readonly settings: SettingsService,
     private readonly audit: AuditService,
-    private readonly scheduler: SchedulerService,
-    private readonly backupDir: string = process.env.BACKUP_DIR ?? BACKUP_DIR_DEFAULT,
+    @Inject(forwardRef(() => SchedulerService)) private readonly scheduler: SchedulerService,
+    @Optional() private readonly backupDir: string = process.env.BACKUP_DIR ?? BACKUP_DIR_DEFAULT,
   ) {}
 
   /** libpq conn string — pg_dump/pg_restore do not read DATABASE_URL themselves. */
@@ -40,11 +43,11 @@ export class BackupService {
   }
 
   private toFile(b: { name: string; sizeBytes: number; createdAt: Date; copiedToShare: boolean }): BackupFile {
-    return { name: b.name, sizeBytes: b.sizeBytes, createdAt: b.createdAt.toISOString(), copiedToShare: b.copiedToShare };
+    return { name: b.name, sizeBytes: b.sizeBytes, createdAt: toJakartaIso(b.createdAt.getTime()), copiedToShare: b.copiedToShare };
   }
 
   /** Spec §5.11: daily pg_dump, optional smbclient copy, retention, audit. */
-  async runBackup(): Promise<BackupFile> {
+  async runBackup(actor: Actor = SYSTEM): Promise<BackupFile> {
     mkdirSync(this.backupDir, { recursive: true });
     const name = `bms-${this.stamp()}.dump`;
     const outPath = join(this.backupDir, name);
@@ -63,7 +66,7 @@ export class BackupService {
     const row = await this.prisma.backup.create({ data: { name, sizeBytes, copiedToShare } });
     await this.applyRetention();
     await this.audit.write({
-      actorId: null, actorName: 'system', action: 'BACKUP_RUN',
+      actorId: actor.id, actorName: actor.name, action: 'BACKUP_RUN',
       entity: 'backup', entityId: name, after: this.toFile(row),
     });
     return this.toFile(row);
@@ -111,7 +114,7 @@ export class BackupService {
     return createReadStream(p);
   }
 
-  async upload(file?: { originalname: string; buffer: Buffer }): Promise<BackupFile> {
+  async upload(file?: { originalname: string; buffer: Buffer }, actor: Actor = SYSTEM): Promise<BackupFile> {
     if (!file) throw new DomainError('VALIDATION_ERROR', 'File backup wajib diunggah.');
     const name = basename(file.originalname);
     if (!name.endsWith('.dump')) throw new DomainError('VALIDATION_ERROR', 'File backup harus berekstensi .dump.');
@@ -125,7 +128,7 @@ export class BackupService {
     writeFileSync(dest, file.buffer);
     const row = await this.prisma.backup.create({ data: { name, sizeBytes: file.buffer.length, copiedToShare: false } });
     await this.audit.write({
-      actorId: null, actorName: 'system', action: 'BACKUP_UPLOAD',
+      actorId: actor.id, actorName: actor.name, action: 'BACKUP_UPLOAD',
       entity: 'backup', entityId: name, after: this.toFile(row),
     });
     return this.toFile(row);
@@ -134,9 +137,11 @@ export class BackupService {
   /** Spec §5.11 restore. Review Focus: pg_restore --list validates BEFORE anything touches data. */
   async restore(input: RestoreRequest, actor: { id: string | null; name: string }): Promise<{ preRestore: BackupFile }> {
     if (input.confirm !== 'RESTORE') throw new DomainError('VALIDATION_ERROR', ERROR_MESSAGES.VALIDATION_ERROR);
-    // ops: set RESTORE_PASSWORD via deployment env, not .env
-    const expected = process.env.RESTORE_PASSWORD ?? '';
-    if (!expected || input.password !== expected) throw new DomainError('VALIDATION_ERROR', 'Password salah.');
+    // spec §5.11.1: re-check the acting Super Admin's own password
+    const me = actor.id ? await this.prisma.user.findUnique({ where: { id: actor.id } }) : null;
+    if (!me?.passwordHash || !(await argon2.verify(me.passwordHash, input.password))) {
+      throw new DomainError('VALIDATION_ERROR', 'Password salah.');
+    }
     const name = basename(input.fileName);
     const src = join(this.backupDir, name);
     if (!name.endsWith('.dump') || !existsSync(src)) {

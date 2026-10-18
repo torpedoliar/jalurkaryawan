@@ -8,11 +8,15 @@ import { SchedulerService } from '../src/scheduler/scheduler.service';
 import { MaintenanceGuard } from '../src/common/guards/maintenance.guard';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import argon2 from 'argon2';
 
 const prisma = new PrismaClient();
 const { scryptSync } = require('node:crypto') as typeof import('node:crypto');
 const key = scryptSync(process.env.APP_SECRET!, 'bms-settings', 32);
 const BACKUP_DIR = '/tmp/bms-test-backups'; // tests use a fake runner, never real pg_dump
+
+// I7: restore re-checks the acting Super Admin's own password (argon2), no env secret
+const ACTOR = { id: 'bk-admin', name: 'Tester' };
 
 let settings: SettingsService;
 let backup: BackupService;
@@ -20,6 +24,11 @@ let fakeExec: { calls: string[][]; onExec: (cmd: string, args: string[]) => { st
 
 beforeAll(async () => {
   await prisma.$transaction([prisma.backup.deleteMany(), prisma.auditLog.deleteMany()]);
+  await prisma.user.upsert({
+    where: { id: ACTOR.id },
+    create: { id: ACTOR.id, nik: 'BK-ADMIN', name: ACTOR.name, role: 'SUPER_ADMIN', passwordHash: await argon2.hash('correct') },
+    update: { passwordHash: await argon2.hash('correct') },
+  });
   const audit = new AuditService(prisma);
   settings = new SettingsService(prisma, audit, key);
   await settings.init();
@@ -99,28 +108,30 @@ describe('upload validation', () => {
 
 describe('restore validation (Review Focus #4)', () => {
   test('wrong password → "Password salah."', async () => {
-    process.env.RESTORE_PASSWORD = 'correct';
-    await expect(backup.restore({ fileName: 'x.dump', password: 'wrong', confirm: 'RESTORE' } as never, { id: 'a', name: 'A' }))
+    await expect(backup.restore({ fileName: 'x.dump', password: 'wrong', confirm: 'RESTORE' } as never, ACTOR))
       .rejects.toThrow('Password salah.');
   });
 
-  test('missing file → NOT_FOUND "File backup tidak ditemukan."', async () => {
-    process.env.RESTORE_PASSWORD = 'correct';
-    await expect(backup.restore({ fileName: 'missing.dump', password: 'correct', confirm: 'RESTORE' } as never, { id: 'a', name: 'A' }))
+  test('unknown actor → "Password salah."', async () => {
+    await expect(backup.restore({ fileName: 'x.dump', password: 'correct', confirm: 'RESTORE' } as never, { id: 'ghost', name: 'G' }))
+      .rejects.toThrow('Password salah.');
+  });
+
+  test('missing file (correct password passes the gate) → NOT_FOUND "File backup tidak ditemukan."', async () => {
+    await expect(backup.restore({ fileName: 'missing.dump', password: 'correct', confirm: 'RESTORE' } as never, ACTOR))
       .rejects.toMatchObject({ code: 'NOT_FOUND', message: 'File backup tidak ditemukan.' });
   });
 
   test('corrupt file: pg_restore --list fails → rejected BEFORE any destructive step (Review Focus #4)', async () => {
     mkdirSync(BACKUP_DIR, { recursive: true });
     writeFileSync(join(BACKUP_DIR, 'corrupt.dump'), Buffer.from('PGDMPgarbage'));
-    process.env.RESTORE_PASSWORD = 'correct';
     fakeExec.calls = [];
     fakeExec.onExec = (cmd) => {
       if (cmd === 'pg_restore' && argsIncludesList()) return { stdout: '', stderr: 'invalid archive', code: 1 };
       return { stdout: '', stderr: '', code: 0 };
     };
     function argsIncludesList() { return fakeExec.calls.at(-1)?.includes('--list') ?? false; }
-    await expect(backup.restore({ fileName: 'corrupt.dump', password: 'correct', confirm: 'RESTORE' } as never, { id: 'a', name: 'A' }))
+    await expect(backup.restore({ fileName: 'corrupt.dump', password: 'correct', confirm: 'RESTORE' } as never, ACTOR))
       .rejects.toThrow('File bukan backup database yang valid.');
     // pg_restore --list ran, but the destructive --clean restore never did
     const cleanCalls = fakeExec.calls.filter((c) => c.includes('--clean'));
@@ -131,8 +142,7 @@ describe('restore validation (Review Focus #4)', () => {
   });
 
   test('confirm !== "RESTORE" → VALIDATION', async () => {
-    process.env.RESTORE_PASSWORD = 'correct';
-    await expect(backup.restore({ fileName: 'x.dump', password: 'correct', confirm: 'yes' } as never, { id: 'a', name: 'A' }))
+    await expect(backup.restore({ fileName: 'x.dump', password: 'correct', confirm: 'yes' } as never, ACTOR))
       .rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
   });
 });
@@ -140,6 +150,8 @@ describe('restore validation (Review Focus #4)', () => {
 // shared-DB hygiene: later suites (reports) expect an empty backups table
 afterAll(async () => {
   await prisma.backup.deleteMany();
+  await prisma.auditLog.deleteMany({ where: { actorId: ACTOR.id } });
+  await prisma.user.deleteMany({ where: { id: ACTOR.id } });
 });
 
 // Extra check beyond the brief's floor: the full §5.11 success sequence, still on the fake runner.
@@ -147,7 +159,6 @@ describe('restore success path', () => {
   test('--list before --clean, maintenance active during restore, audit into restored DB', async () => {
     mkdirSync(BACKUP_DIR, { recursive: true });
     writeFileSync(join(BACKUP_DIR, 'good.dump'), Buffer.from('PGDMPok'));
-    process.env.RESTORE_PASSWORD = 'correct';
 
     const calls: string[][] = [];
     let paused = 0;
@@ -172,7 +183,7 @@ describe('restore success path', () => {
 
     const r = await svc.restore(
       { fileName: 'good.dump', password: 'correct', confirm: 'RESTORE' } as never,
-      { id: null, name: 'Tester' },
+      ACTOR,
     );
 
     const listIdx = calls.findIndex((c) => c[0] === 'pg_restore' && c.includes('--list'));
@@ -196,7 +207,6 @@ describe('restore success path', () => {
   test('migrate deploy failure → throws "Restore gagal:", maintenance cleared via finally', async () => {
     mkdirSync(BACKUP_DIR, { recursive: true });
     writeFileSync(join(BACKUP_DIR, 'migfail.dump'), Buffer.from('PGDMPok'));
-    process.env.RESTORE_PASSWORD = 'correct';
     const runner = {
       exec: async (cmd: string, args: string[]) => {
         if (cmd === 'pg_dump') {
@@ -209,7 +219,7 @@ describe('restore success path', () => {
     } as ExecRunnerService;
     const spy = { pauseAll: () => {}, resumeAll: () => {} } as SchedulerService;
     const svc = new BackupService(prisma, runner, settings, new AuditService(prisma), spy, BACKUP_DIR);
-    await expect(svc.restore({ fileName: 'migfail.dump', password: 'correct', confirm: 'RESTORE' } as never, { id: null, name: 'Tester' }))
+    await expect(svc.restore({ fileName: 'migfail.dump', password: 'correct', confirm: 'RESTORE' } as never, ACTOR))
       .rejects.toThrow('Restore gagal: migration failed');
     expect(MaintenanceGuard.enabled).toBe(false);
     rmSync(BACKUP_DIR, { recursive: true, force: true });
@@ -219,7 +229,6 @@ describe('restore success path', () => {
   test('pauseAll throwing → restore rejects, maintenance still cleared', async () => {
     mkdirSync(BACKUP_DIR, { recursive: true });
     writeFileSync(join(BACKUP_DIR, 'pausefail.dump'), Buffer.from('PGDMPok'));
-    process.env.RESTORE_PASSWORD = 'correct';
     let resumed = 0;
     const runner = { exec: async () => ({ stdout: '', stderr: '', code: 0 }) } as ExecRunnerService;
     const spy = {
@@ -227,7 +236,7 @@ describe('restore success path', () => {
       resumeAll: () => { resumed++; },
     } as SchedulerService;
     const svc = new BackupService(prisma, runner, settings, new AuditService(prisma), spy, BACKUP_DIR);
-    await expect(svc.restore({ fileName: 'pausefail.dump', password: 'correct', confirm: 'RESTORE' } as never, { id: null, name: 'Tester' }))
+    await expect(svc.restore({ fileName: 'pausefail.dump', password: 'correct', confirm: 'RESTORE' } as never, ACTOR))
       .rejects.toThrow('cron missing');
     expect(MaintenanceGuard.enabled).toBe(false);
     expect(resumed).toBe(1); // finally still attempted resume
