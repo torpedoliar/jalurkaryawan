@@ -5,9 +5,11 @@ import { SettingsService } from './settings.service';
 import { SettingsController } from './settings.controller';
 import { AuditService } from '../audit/audit.service';
 import { AuditController } from '../audit/audit.controller';
+import { BackupModule } from '../backup/backup.module';
 
 @Global()
 @Module({
+  imports: [BackupModule],
   controllers: [SettingsController, AuditController],
   providers: [
     SettingsService, AuditService, PrismaClient,

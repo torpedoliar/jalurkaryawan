@@ -5,7 +5,7 @@ import { GenerateService } from '../generate/generate.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { SettingsService } from '../settings/settings.service';
 
-/** Injected token for the backup job (Task 14 provides the real impl). */
+/** Injected token for the backup job (Task 13 provides the real BackupService). */
 export const BACKUP_JOB = 'BACKUP_JOB';
 export interface BackupJobLike { runBackup(): Promise<{ name: string; copiedToShare: boolean }> }
 

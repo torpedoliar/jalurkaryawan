@@ -31,6 +31,8 @@ const wipe = () =>
     prisma.route.deleteMany(), prisma.bus.deleteMany(), prisma.vendor.deleteMany(),
     prisma.shift.deleteMany(), prisma.refreshToken.deleteMany(), prisma.deviceToken.deleteMany(),
     prisma.user.deleteMany(), prisma.auditLog.deleteMany(),
+    // file order is size-based: backup.test may run AFTER this suite and leave bms-* rows behind
+    prisma.backup.deleteMany(),
   ]);
 
 beforeAll(async () => {

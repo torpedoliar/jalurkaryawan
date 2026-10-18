@@ -16,10 +16,11 @@ import { AdminModule } from './admin/admin.module';
 import { ReportsModule } from './reports/reports.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { SchedulerModule } from './scheduler/scheduler.module';
+import { BackupModule } from './backup/backup.module';
 
 @Module({
   controllers: [HealthController],
-  imports: [SettingsModule, AuthModule, NotificationsModule, FleetModule, RoutesModule, UsersModule, TripsModule, BookingsModule, AdminModule, ReportsModule, ScheduleModule.forRoot(), SchedulerModule],
+  imports: [SettingsModule, AuthModule, NotificationsModule, FleetModule, RoutesModule, UsersModule, TripsModule, BookingsModule, AdminModule, ReportsModule, ScheduleModule.forRoot(), SchedulerModule, BackupModule],
   providers: [
     MaintenanceGuard,
     { provide: APP_GUARD, useExisting: MaintenanceGuard },

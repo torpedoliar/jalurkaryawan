@@ -4,6 +4,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { ZodPipe } from '../common/zod-body.pipe';
 import { SettingsService } from './settings.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { BackupService } from '../backup/backup.service';
 
 @Controller('settings')
 @Roles('SUPER_ADMIN')
@@ -11,6 +12,7 @@ export class SettingsController {
   constructor(
     private readonly settings: SettingsService,
     private readonly notifications: NotificationsService,
+    private readonly backups: BackupService,
   ) {}
 
   @Get()
@@ -33,9 +35,9 @@ export class SettingsController {
     return { ok: true, message: 'Notifikasi uji terkirim ke perangkat kamu.' };
   }
 
-  // Real implementation arrives in Task 14 (share); stub matches mock's unconfigured answer.
+  // Real smbclient test (Task 13 BackupService.testShare); answers match mock system.ts settingsTestShare.
   @Post('test-share')
   testShare() {
-    return { ok: false, message: 'Path network share belum diisi.' };
+    return this.backups.testShare();
   }
 }
