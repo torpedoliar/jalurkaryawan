@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { Button, Pressable, Text, TextInput, View } from "react-native";
+import { Pressable, Text, TextInput, View } from "react-native";
 import { z } from "zod";
 import { ENDPOINTS, Route, Shift, Subscription, SubscriptionCreateResponse, SubscriptionInput, addDays } from "@bms/shared";
 import { api } from "../api";
-import { DIRECTION_LABEL, ErrorText, WeekdayPicker, dayNames, today, useAction, useLoad } from "../ui";
+import { Btn, DIRECTION_LABEL, ErrorText, S, Title, chip, chipText, WeekdayPicker, dayNames, today, useAction, useLoad } from "../ui";
 import { EMPTY_CHOICE, TripFields, type TripChoice } from "./Book";
 
 /** Spec 6.2 langganan: create, list, end. */
@@ -31,38 +31,40 @@ export function Subscriptions() {
     if (await run(() => api.post(ENDPOINTS.subscriptionEnd(id), Subscription))) { setEndId(""); list.reload(); }
   }
   return (
-    <View>
-      <Text accessibilityRole="header">Langganan</Text>
+    <View style={S.screen}>
+      <Title kicker="Jadwal tetap">Langganan</Title>
       <TripFields value={choice} onChange={setChoice} />
-      <View>
-        <Text>Mulai</Text>
-        <TextInput value={startDate} onChangeText={setStart} placeholder="YYYY-MM-DD" accessibilityLabel="Mulai" />
-        <Pressable accessibilityRole="button" testID="mulai-hari-ini" onPress={() => setStart(today())}>
-          <Text>Hari ini</Text>
+      <View style={{ gap: 6 }}>
+        <Text style={S.eyebrow}>Mulai</Text>
+        <TextInput value={startDate} onChangeText={setStart} placeholder="YYYY-MM-DD" accessibilityLabel="Mulai" style={S.input} />
+        <View style={S.chips}>
+        <Pressable accessibilityRole="button" testID="mulai-hari-ini" onPress={() => setStart(today())} style={chip(false)}>
+          <Text style={chipText(false)}>Hari ini</Text>
         </Pressable>
         {Array.from({ length: 7 }, (_, i) => addDays(today(), i)).map((d) => (
-          <Pressable key={d} accessibilityRole="button" accessibilityState={{ selected: startDate === d }} testID={`mulai-${d}`} onPress={() => setStart(d)}>
-            <Text style={{ fontWeight: startDate === d ? "700" : "400" }}>{d}</Text>
+          <Pressable key={d} accessibilityRole="button" accessibilityState={{ selected: startDate === d }} testID={`mulai-${d}`} onPress={() => setStart(d)} style={chip(startDate === d)}>
+            <Text style={chipText(startDate === d)}>{d}</Text>
           </Pressable>
         ))}
+        </View>
       </View>
-      <View>
-        <Text>Sampai (opsional)</Text>
-        <TextInput value={endDate} onChangeText={setEnd} placeholder="YYYY-MM-DD" accessibilityLabel="Sampai (opsional)" />
+      <View style={{ gap: 6 }}>
+        <Text style={S.eyebrow}>Sampai (opsional)</Text>
+        <TextInput value={endDate} onChangeText={setEnd} placeholder="YYYY-MM-DD" accessibilityLabel="Sampai (opsional)" style={S.input} />
       </View>
       <WeekdayPicker value={weekdays} onChange={setWeekdays} />
       <ErrorText error={error ?? list.error} />
       {result && (
-        <Text accessibilityLiveRegion="polite">{`Terbooked ${result.booked.length} tanggal${result.rejected.length > 0 ? `; penuh: ${result.rejected.join(", ")}` : ""}${result.skippedCutoff.length > 0 ? `; lewat batas: ${result.skippedCutoff.join(", ")}` : ""}`}</Text>
+        <Text accessibilityLiveRegion="polite" style={S.text}>{`Terbooked ${result.booked.length} tanggal${result.rejected.length > 0 ? `; penuh: ${result.rejected.join(", ")}` : ""}${result.skippedCutoff.length > 0 ? `; lewat batas: ${result.skippedCutoff.join(", ")}` : ""}`}</Text>
       )}
-      <Button title={busy ? "Membuat..." : "Buat langganan"} onPress={() => void submit()} disabled={busy || !ready || !choice.stopId || weekdays.length === 0} />
-      {list.data?.length === 0 && <Text>Belum ada langganan.</Text>}
+      <Btn primary title={busy ? "Membuat..." : "Buat langganan"} onPress={() => void submit()} disabled={busy || !ready || !choice.stopId || weekdays.length === 0} />
+      {list.data?.length === 0 && <Text style={S.text}>Belum ada langganan.</Text>}
       {list.data?.map((s) => (
-        <View key={s.id} testID="subscription-card">
-          <Text>{routeCode(s.routeId)} · {shiftName(s.shiftId)} · {DIRECTION_LABEL[s.direction]} · {s.startDate} s/d {s.endDate ?? "seterusnya"} · {dayNames(s.weekdays)} · {s.status === "ACTIVE" ? "Aktif" : "Berakhir"}</Text>
+        <View key={s.id} testID="subscription-card" style={S.card}>
+          <Text style={S.text}>{routeCode(s.routeId)} · {shiftName(s.shiftId)} · {DIRECTION_LABEL[s.direction]} · {s.startDate} s/d {s.endDate ?? "seterusnya"} · {dayNames(s.weekdays)} · {s.status === "ACTIVE" ? "Aktif" : "Berakhir"}</Text>
           {s.status === "ACTIVE" && (endId === s.id
-            ? <Button title="Ya, akhiri" onPress={() => void end(s.id)} disabled={busy} />
-            : <Button title="Akhiri" onPress={() => setEndId(s.id)} />)}
+            ? <Btn title="Ya, akhiri" onPress={() => void end(s.id)} disabled={busy} />
+            : <Btn title="Akhiri" onPress={() => setEndId(s.id)} />)}
         </View>
       ))}
     </View>

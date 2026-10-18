@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { Button, Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { ENDPOINTS, SetupStatus, type Me } from "@bms/shared";
 import { api, apiEvents, loadSession, logout } from "./api";
 import { AuthContext } from "./auth";
-import { today } from "./ui";
+import { Btn, C, F, S, chip, chipText, today } from "./ui";
 import { registerPush, unregisterPush } from "./push";
 import { Login } from "./screens/Login";
 import { ChangePassword } from "./screens/ChangePassword";
@@ -59,13 +59,15 @@ export function App({ initialTab }: { initialTab?: string }) {
   const signOut = useCallback(async () => { await unregisterPush(); await logout(); setMe(null); }, []);
 
   if (maintenance) return <Maintenance onDone={back} />;
-  if (boot === "loading") return <View><Text>Memuat...</Text></View>;
+  if (boot === "loading") return <View style={a.center}><Text style={S.eyebrow}>Memuat...</Text></View>;
   if (boot === "setup") {
     return (
-      <View>
-        <Text accessibilityRole="header">Setup Awal</Text>
-        <Text>Belum ada Super Admin.</Text>
-        <Text>Hubungi admin untuk setup awal lewat web.</Text>
+      <View style={a.center}>
+        <View style={S.card}>
+          <Text accessibilityRole="header" style={S.title}>Setup Awal</Text>
+          <Text style={S.text}>Belum ada Super Admin.</Text>
+          <Text style={S.text}>Hubungi admin untuk setup awal lewat web.</Text>
+        </View>
       </View>
     );
   }
@@ -75,22 +77,33 @@ export function App({ initialTab }: { initialTab?: string }) {
       {!me ? <Login />
         : me.mustChangePassword ? <ChangePassword forced />
         : me.role !== "EMPLOYEE" ? (
-          <View>
-            <Text>Aplikasi ini khusus karyawan. Gunakan web.</Text>
-            <Button title="Keluar" onPress={() => void signOut()} />
+          <View style={a.center}>
+            <View style={S.card}>
+              <Text style={S.text}>Aplikasi ini khusus karyawan. Gunakan web.</Text>
+              <Btn title="Keluar" onPress={() => void signOut()} />
+            </View>
           </View>
         ) : (
-          <ScrollView>
-              <Text>{me.name}</Text>
+          <View style={{ flex: 1, backgroundColor: C.bg }}>
+            <View style={a.bar}>
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text style={a.brand}>Jalur <Text style={a.mark}> Karyawan </Text></Text>
+                <Text style={S.eyebrow}>{me.nik}</Text>
+                <Text style={[S.text, { fontFamily: F.bodyBold }]}>{me.name}</Text>
+              </View>
+              <Btn title="Keluar" onPress={() => void signOut()} />
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={a.tabs}>
               {TABS.map((t) => (
-                <Pressable key={t.id} accessibilityRole="button" accessibilityState={{ selected: tab === t.id }} onPress={() => setTab(t.id)}>
-                  <Text style={{ fontWeight: tab === t.id ? "700" : "400" }}>{t.label}</Text>
+                <Pressable key={t.id} accessibilityRole="button" accessibilityState={{ selected: tab === t.id }} onPress={() => setTab(t.id)} style={chip(tab === t.id)}>
+                  <Text style={chipText(tab === t.id)}>{t.label}</Text>
                 </Pressable>
               ))}
-              <Button title="Keluar" onPress={() => void signOut()} />
+            </ScrollView>
+            <ScrollView contentContainerStyle={a.body}>
               {me.bookingSuspendedUntil !== null && me.bookingSuspendedUntil >= today() && (
-                <Text accessibilityLiveRegion="polite">
-                  Booking kamu dibekukan sampai {me.bookingSuspendedUntil}. Alasan: {me.suspendReason}
+                <Text accessibilityLiveRegion="polite" style={a.banner}>
+                  Booking kamu dibekukan sampai {me.bookingSuspendedUntil}.{me.suspendReason ? ` Alasan: ${me.suspendReason}` : ""}
                 </Text>
               )}
               {tab === "beranda" && <Home />}
@@ -100,8 +113,19 @@ export function App({ initialTab }: { initialTab?: string }) {
               {tab === "notifikasi" && <Notifications />}
               {tab === "keberangkatan" && <Departures />}
               {tab === "ganti-password" && <ChangePassword />}
-          </ScrollView>
+            </ScrollView>
+          </View>
         )}
     </AuthContext.Provider>
   );
 }
+
+const a = StyleSheet.create({
+  bar: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10, backgroundColor: C.surface, borderBottomWidth: 3, borderColor: C.ink },
+  brand: { fontFamily: F.black, fontSize: 24, color: C.ink },
+  mark: { backgroundColor: C.signal, color: C.signalInk },
+  tabs: { gap: 6, paddingHorizontal: 16, paddingVertical: 10 },
+  body: { padding: 16, paddingBottom: 40, gap: 14 },
+  center: { flex: 1, justifyContent: "center", padding: 16, backgroundColor: C.bg },
+  banner: { backgroundColor: C.signal, color: C.signalInk, padding: 12, borderRadius: 12, fontFamily: F.bodyBold, overflow: "hidden" },
+});

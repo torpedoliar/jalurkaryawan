@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { Button, Text, TextInput, View } from "react-native";
+import { Text, TextInput, View } from "react-native";
 import { z } from "zod";
 import { ChangePasswordRequest, ENDPOINTS, Me } from "@bms/shared";
 import { api } from "../api";
 import { useAuth } from "../auth";
-import { ErrorText, useAction } from "../ui";
+import { Btn, C, ErrorText, S, Title, useAction } from "../ui";
 
 export function ChangePassword({ forced = false }: { forced?: boolean }) {
   const { setMe } = useAuth();
@@ -23,18 +23,21 @@ export function ChangePassword({ forced = false }: { forced?: boolean }) {
     setMe(me);
   }
   return (
-    <View>
-      <Text accessibilityRole="header">Ganti Password</Text>
-      {forced && <Text>Kamu wajib mengganti password sebelum melanjutkan.</Text>}
-      <Text>Password lama</Text>
-      <TextInput value={form.current} onChangeText={(v) => setForm({ ...form, current: v })} secureTextEntry accessibilityLabel="Password lama" />
-      <Text>Password baru</Text>
-      <TextInput value={form.next} onChangeText={(v) => setForm({ ...form, next: v })} secureTextEntry accessibilityLabel="Password baru" />
-      <Text>Ulangi password baru</Text>
-      <TextInput value={form.again} onChangeText={(v) => setForm({ ...form, again: v })} secureTextEntry accessibilityLabel="Ulangi password baru" />
+    // Forced mode renders without the tab shell, so it brings its own page padding.
+    <View style={[S.screen, forced && { flex: 1, justifyContent: "center", padding: 16, backgroundColor: C.bg }]}>
+      <Title kicker="Akun">Ganti Password</Title>
+      {forced && <Text style={S.text}>Kamu wajib mengganti password sebelum melanjutkan.</Text>}
+      <View style={S.card}>
+      <Text style={S.eyebrow}>Password lama</Text>
+      <TextInput value={form.current} onChangeText={(v) => setForm({ ...form, current: v })} secureTextEntry accessibilityLabel="Password lama" style={S.input} />
+      <Text style={S.eyebrow}>Password baru</Text>
+      <TextInput value={form.next} onChangeText={(v) => setForm({ ...form, next: v })} secureTextEntry accessibilityLabel="Password baru" style={S.input} />
+      <Text style={S.eyebrow}>Ulangi password baru</Text>
+      <TextInput value={form.again} onChangeText={(v) => setForm({ ...form, again: v })} secureTextEntry accessibilityLabel="Ulangi password baru" style={S.input} />
       <ErrorText error={error} />
-      {done && <Text accessibilityLiveRegion="polite">Password berhasil diganti.</Text>}
-      <Button title={busy ? "Menyimpan..." : "Simpan"} onPress={() => void submit()} disabled={busy} />
+      {done && <Text accessibilityLiveRegion="polite" style={S.text}>Password berhasil diganti.</Text>}
+      <Btn primary title={busy ? "Menyimpan..." : "Simpan"} onPress={() => void submit()} disabled={busy} />
+      </View>
     </View>
   );
 }

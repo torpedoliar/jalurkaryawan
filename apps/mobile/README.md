@@ -1,6 +1,7 @@
 # Bus Karyawan (mobile)
 
 Expo app for EMPLOYEE role. Spec: `docs/superpowers/specs/2026-10-13-bus-booking-subproject-a-design.md` §6.2.
+Open items before release: `docs/mobile-todo.md`.
 
 ## Run with mock API
 

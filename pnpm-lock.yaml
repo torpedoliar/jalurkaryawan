@@ -20,12 +20,24 @@ importers:
       '@bms/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@expo-google-fonts/archivo':
+        specifier: ^0.4.2
+        version: 0.4.2
+      '@expo-google-fonts/inter-tight':
+        specifier: ^0.4.2
+        version: 0.4.2
+      '@expo-google-fonts/jetbrains-mono':
+        specifier: ^0.4.1
+        version: 0.4.1
       expo:
         specifier: 58.0.11
         version: 58.0.11(@babel/core@7.29.7)(@expo/dom-webview@58.0.2)(react-dom@18.3.1(react@19.3.0))(react-native@0.88.0(@babel/core@7.29.7)(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@5.6.3)
       expo-constants:
         specifier: 58.0.12
         version: 58.0.12(expo@58.0.11)(react-native@0.88.0(@babel/core@7.29.7)(@types/react@19.3.0)(react@19.3.0))(typescript@5.6.3)
+      expo-font:
+        specifier: ~58.0.8
+        version: 58.0.8(expo@58.0.11)(react-native@0.88.0(@babel/core@7.29.7)(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
       expo-notifications:
         specifier: 58.1.4
         version: 58.1.4(expo@58.0.11)(react-native@0.88.0(@babel/core@7.29.7)(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@5.6.3)
@@ -782,6 +794,15 @@ packages:
     engines: {node: '>=12'}
     cpu: [x64]
     os: [win32]
+
+  '@expo-google-fonts/archivo@0.4.2':
+    resolution: {integrity: sha512-FLhI4/ZVIFSHHxx15Z7Rr4QX/4ZrJozEebBEFSdHSRRwULGCuSIpbb3dz56Hslux6LZEnJ1mVpZ6CyVpUzLwIg==}
+
+  '@expo-google-fonts/inter-tight@0.4.2':
+    resolution: {integrity: sha512-/b4YLh8v145nMfrtw0FF2EB8eRhw/SVt/LdhzN1+Faz/uSFvZkF7EtxfipV8iacDSb1PUqyssHd0tZjlzhhf2g==}
+
+  '@expo-google-fonts/jetbrains-mono@0.4.1':
+    resolution: {integrity: sha512-CslACrtMOcRwoWXCO7OMEI+9w3fukWSoBtvNz46OqPoogEuuoY0tkDY1O8sFumk8t0pC6Cx0Xr95O0TOQhpkug==}
 
   '@expo/cli@58.1.9':
     resolution: {integrity: sha512-XSTtCXU0xvPSJOMdYG8m0srpXcUmsfs1iSmGo6vs/epnp8iLd8Id2fT7iExHNMJkctJopvK8tKY8E7Eja03ipQ==}
@@ -4924,6 +4945,12 @@ snapshots:
 
   '@esbuild/win32-x64@0.21.5':
     optional: true
+
+  '@expo-google-fonts/archivo@0.4.2': {}
+
+  '@expo-google-fonts/inter-tight@0.4.2': {}
+
+  '@expo-google-fonts/jetbrains-mono@0.4.1': {}
 
   '@expo/cli@58.1.9(@expo/dom-webview@58.0.2)(expo-constants@58.0.12(expo@58.0.11)(react-native@0.88.0(@babel/core@7.29.7)(@types/react@19.3.0)(react@19.3.0))(typescript@5.6.3))(expo-font@58.0.8(expo@58.0.11)(react-native@0.88.0(@babel/core@7.29.7)(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(expo@58.0.11)(react-dom@18.3.1(react@19.3.0))(react-native@0.88.0(@babel/core@7.29.7)(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@5.6.3)':
     dependencies:

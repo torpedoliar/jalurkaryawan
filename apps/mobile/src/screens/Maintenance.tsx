@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Text, View } from "react-native";
 import { ENDPOINTS, SystemStatus } from "@bms/shared";
 import { api } from "../api";
+import { C, S } from "../ui";
 
 const POLL_MS = 2000;
 
@@ -14,9 +15,9 @@ export function Maintenance({ onDone }: { onDone(): void }) {
     return () => clearInterval(id);
   }, [onDone]);
   return (
-    <View>
-      <Text accessibilityRole="header">Sistem sedang dalam pemeliharaan</Text>
-      <Text>Sistem sedang memulihkan database. Halaman akan kembali otomatis.</Text>
+    <View style={{ flex: 1, justifyContent: "center", padding: 16, gap: 10, backgroundColor: C.bg }}>
+      <Text accessibilityRole="header" style={[S.title, { fontSize: 26 }]}>Sistem sedang dalam pemeliharaan</Text>
+      <Text style={S.text}>Sistem sedang memulihkan database. Halaman akan kembali otomatis.</Text>
     </View>
   );
 }

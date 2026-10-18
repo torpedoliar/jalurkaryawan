@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { Button, Text, TextInput, View } from "react-native";
+import { Text, TextInput, View } from "react-native";
 import { login } from "../api";
 import { useAuth } from "../auth";
-import { ErrorText, useAction } from "../ui";
+import { Btn, C, ErrorText, F, S, useAction } from "../ui";
 
 export function Login() {
   const { setMe } = useAuth();
@@ -14,14 +14,19 @@ export function Login() {
     if (me) setMe(me);
   }
   return (
-    <View>
-      <Text accessibilityRole="header">Bus Karyawan</Text>
-      <Text>NIK</Text>
-      <TextInput value={nik} onChangeText={setNik} autoCapitalize="none" accessibilityLabel="NIK" />
-      <Text>Password</Text>
-      <TextInput value={password} onChangeText={setPassword} secureTextEntry accessibilityLabel="Password" />
-      <ErrorText error={error} />
-      <Button title={busy ? "Memuat..." : "Masuk"} onPress={() => void submit()} disabled={busy} />
+    <View style={{ flex: 1, justifyContent: "center", padding: 16, gap: 16, backgroundColor: C.bg }}>
+      <View style={{ gap: 4 }}>
+        <Text style={{ fontFamily: F.black, fontSize: 34, color: C.ink }}>Jalur <Text style={{ backgroundColor: C.signal, color: C.signalInk }}> Karyawan </Text></Text>
+        <Text accessibilityRole="header" style={S.eyebrow}>Bus Karyawan</Text>
+      </View>
+      <View style={[S.card, { gap: 10 }]}>
+        <Text style={S.eyebrow}>NIK</Text>
+        <TextInput value={nik} onChangeText={setNik} autoCapitalize="none" accessibilityLabel="NIK" style={S.input} />
+        <Text style={S.eyebrow}>Password</Text>
+        <TextInput value={password} onChangeText={setPassword} secureTextEntry accessibilityLabel="Password" style={S.input} />
+        <ErrorText error={error} />
+        <Btn primary title={busy ? "Memuat..." : "Masuk"} onPress={() => void submit()} disabled={busy} />
+      </View>
     </View>
   );
 }

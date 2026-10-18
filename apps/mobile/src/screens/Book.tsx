@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { Button, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { z } from "zod";
 import { Availability, Booking, DailyBookingRequest, Direction, ENDPOINTS, Route, Shift, Stop, addDays } from "@bms/shared";
 import { api } from "../api";
 import { useMe } from "../auth";
-import { ChipSelect, DIRECTION_LABEL, ErrorText, hhmm, today, useAction, useLoad } from "../ui";
+import { Btn, ChipSelect, DIRECTION_LABEL, ErrorText, S, Title, hhmm, today, useAction, useLoad } from "../ui";
 
 export interface TripChoice { shiftId: string; direction: Direction | ""; routeId: string; stopId: string }
 export const EMPTY_CHOICE: TripChoice = { shiftId: "", direction: "", routeId: "", stopId: "" };
@@ -18,7 +18,7 @@ export function TripFields({ value, onChange }: { value: TripChoice; onChange(v:
     [value.routeId],
   );
   return (
-    <View>
+    <View style={S.screen}>
       <ChipSelect
         label="Shift"
         options={(shifts.data ?? []).map((s) => ({ value: s.id, label: `${s.name} (${s.startTime}–${s.endTime})` }))}
@@ -76,16 +76,16 @@ export function Book() {
     if (b) { setBooked(b); avail.reload(); }
   }
   return (
-    <View>
-      <Text accessibilityRole="header">Booking Harian</Text>
+    <View style={S.screen}>
+      <Title kicker="Pesan kursi">Booking Harian</Title>
       <ChipSelect label="Tanggal" options={dates.map((d) => ({ value: d, label: d }))} value={date} onChange={(v) => { setDate(v); setBooked(null); }} />
       <TripFields value={choice} onChange={(v) => { setChoice(v); setBooked(null); }} />
       {a && (
-        <Text>{`Sisa kursi: ${a.capacity - a.bookedCount} dari ${a.capacity}${a.firstDepartureAt ? ` · berangkat ${hhmm(a.firstDepartureAt)} · batas booking ${a.cutoffAt ? hhmm(a.cutoffAt) : ""}` : ""}${a.cutoffAt && Date.now() >= Date.parse(a.cutoffAt) ? " · batas booking sudah lewat" : ""}${!a.bookable ? " · tidak bisa dibooking" : ""}`}</Text>
+        <Text style={[S.card, S.text]}>{`Sisa kursi: ${a.capacity - a.bookedCount} dari ${a.capacity}${a.firstDepartureAt ? ` · berangkat ${hhmm(a.firstDepartureAt)} · batas booking ${a.cutoffAt ? hhmm(a.cutoffAt) : ""}` : ""}${a.cutoffAt && Date.now() >= Date.parse(a.cutoffAt) ? " · batas booking sudah lewat" : ""}${!a.bookable ? " · tidak bisa dibooking" : ""}`}</Text>
       )}
       <ErrorText error={error ?? avail.error} />
-      {booked && <Text accessibilityLiveRegion="polite">{`Booking berhasil: ${booked.routeCode} ${booked.stopName}, jemput ${hhmm(booked.pickupAt)}, bus ${booked.busPlate}.`}</Text>}
-      <Button title={busy ? "Memesan..." : "Pesan"} onPress={() => void submit()} disabled={busy || suspended || !ready || !choice.stopId} />
+      {booked && <Text accessibilityLiveRegion="polite" style={S.text}>{`Booking berhasil: ${booked.routeCode} ${booked.stopName}, jemput ${hhmm(booked.pickupAt)}, bus ${booked.busPlate}.`}</Text>}
+      <Btn primary title={busy ? "Memesan..." : "Pesan"} onPress={() => void submit()} disabled={busy || suspended || !ready || !choice.stopId} />
     </View>
   );
 }
