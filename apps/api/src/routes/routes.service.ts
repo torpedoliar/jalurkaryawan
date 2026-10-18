@@ -25,9 +25,10 @@ export class RoutesService {
   }
 
   async update(id: string, input: RouteInput, actor: Actor) {
+    const before = await this.prisma.route.findUnique({ where: { id } });
+    if (!before) throw new DomainError('NOT_FOUND', 'Data tidak ditemukan.');
     const dup = await this.prisma.route.findUnique({ where: { code: input.code } });
     if (dup && dup.id !== id) throw new DomainError('VALIDATION_ERROR', `Kode rute ${input.code} sudah dipakai.`);
-    const before = await this.prisma.route.findUniqueOrThrow({ where: { id } });
     // mock PUT parity: deactivation is rejected while trips/templates still use the route
     if (before.active && !input.active && (await inUseByTrips(this.prisma, { routeId: id }))) {
       throw new DomainError('VALIDATION_ERROR', 'Rute masih dipakai template aktif atau trip yang belum berangkat.');
@@ -38,10 +39,11 @@ export class RoutesService {
   }
 
   async deactivate(id: string, actor: Actor) {
+    const before = await this.prisma.route.findUnique({ where: { id } });
+    if (!before) throw new DomainError('NOT_FOUND', 'Data tidak ditemukan.');
     if (await inUseByTrips(this.prisma, { routeId: id })) {
       throw new DomainError('VALIDATION_ERROR', 'Rute masih dipakai template aktif atau trip yang belum berangkat.');
     }
-    const before = await this.prisma.route.findUniqueOrThrow({ where: { id } });
     const r = await this.prisma.route.update({ where: { id }, data: { active: false } });
     await this.audit.write({ actorId: actor.id, actorName: actor.name, action: 'ROUTE_UPDATE', entity: 'route', entityId: id, before, after: r });
     return r;

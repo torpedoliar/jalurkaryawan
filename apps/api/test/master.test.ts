@@ -130,3 +130,25 @@ describe('routes + stops', () => {
       .rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 });
+
+describe('missing entity', () => {
+  test('update with unknown id → 404 NOT_FOUND even when plate/code collides (mock find-first order)', async () => {
+    const v = await prisma.vendor.findFirstOrThrow();
+    await expect(
+      buses.update('missing-bus', { plate: 'B 2002 BB', capacity: 30, vendorId: v.id, active: true }, actor),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND', message: 'Data tidak ditemukan.' });
+    await expect(
+      routes.update('missing-route', { code: 'RZ', name: 'Z', color: '#111111', active: true }, actor),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND', message: 'Data tidak ditemukan.' });
+    await expect(vendors.update('missing-vendor', { name: 'x', contact: '', active: false }, actor))
+      .rejects.toMatchObject({ code: 'NOT_FOUND', message: 'Data tidak ditemukan.' });
+    await expect(vendors.deactivate('missing-vendor', actor))
+      .rejects.toMatchObject({ code: 'NOT_FOUND', message: 'Data tidak ditemukan.' });
+    await expect(buses.setBusCapacity('missing-bus', 10, actor))
+      .rejects.toMatchObject({ code: 'NOT_FOUND', message: 'Data tidak ditemukan.' });
+    await expect(buses.deactivate('missing-bus', actor))
+      .rejects.toMatchObject({ code: 'NOT_FOUND', message: 'Data tidak ditemukan.' });
+    await expect(routes.deactivate('missing-route', actor))
+      .rejects.toMatchObject({ code: 'NOT_FOUND', message: 'Data tidak ditemukan.' });
+  });
+});

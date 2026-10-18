@@ -21,20 +21,22 @@ export class VendorsService {
   }
 
   async update(id: string, input: VendorInput, actor: Actor) {
+    const before = await this.prisma.vendor.findUnique({ where: { id } });
+    if (!before) throw new DomainError('NOT_FOUND', 'Data tidak ditemukan.');
     // mock PUT parity: deactivation is rejected while the vendor still has active buses
     if (!input.active && (await this.prisma.bus.count({ where: { vendorId: id, active: true } })) > 0) {
       throw new DomainError('VALIDATION_ERROR', 'Vendor masih punya bus aktif.');
     }
-    const before = await this.prisma.vendor.findUniqueOrThrow({ where: { id } });
     const v = await this.prisma.vendor.update({ where: { id }, data: { name: input.name, contact: input.contact, active: input.active } });
     await this.audit.write({ actorId: actor.id, actorName: actor.name, action: 'VENDOR_UPDATE', entity: 'vendor', entityId: id, before, after: v });
     return v;
   }
 
   async deactivate(id: string, actor: Actor) {
+    const before = await this.prisma.vendor.findUnique({ where: { id } });
+    if (!before) throw new DomainError('NOT_FOUND', 'Data tidak ditemukan.');
     const activeBuses = await this.prisma.bus.count({ where: { vendorId: id, active: true } });
     if (activeBuses > 0) throw new DomainError('VALIDATION_ERROR', 'Vendor masih punya bus aktif.');
-    const before = await this.prisma.vendor.findUniqueOrThrow({ where: { id } });
     const v = await this.prisma.vendor.update({ where: { id }, data: { active: false } });
     await this.audit.write({ actorId: actor.id, actorName: actor.name, action: 'VENDOR_UPDATE', entity: 'vendor', entityId: id, before, after: v });
     return v;

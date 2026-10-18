@@ -33,14 +33,15 @@ export class BusesService {
   }
 
   async update(id: string, input: BusInput, actor: Actor) {
-    // mock PUT parity order: vendor exists → plate unique → deactivate block → capacity rule → update
+    // mock PUT parity order: bus exists → vendor exists → plate unique → deactivate block → capacity rule → update
+    const before = await this.prisma.bus.findUnique({ where: { id } });
+    if (!before) throw new DomainError('NOT_FOUND', 'Data tidak ditemukan.');
     if (!(await this.prisma.vendor.findUnique({ where: { id: input.vendorId } }))) {
       throw new DomainError('NOT_FOUND', 'Data tidak ditemukan.');
     }
     const plate = input.plate.toUpperCase();
     const dup = await this.prisma.bus.findUnique({ where: { plate } });
     if (dup && dup.id !== id) throw new DomainError('VALIDATION_ERROR', `Plat ${plate} sudah terdaftar.`);
-    const before = await this.prisma.bus.findUniqueOrThrow({ where: { id } });
     if (before.active && !input.active && (await inUseByTrips(this.prisma, { busId: id }))) {
       throw new DomainError('VALIDATION_ERROR', 'Bus masih dipakai template aktif atau trip yang belum berangkat.');
     }
@@ -51,10 +52,11 @@ export class BusesService {
   }
 
   async deactivate(id: string, actor: Actor) {
+    const before = await this.prisma.bus.findUnique({ where: { id } });
+    if (!before) throw new DomainError('NOT_FOUND', 'Data tidak ditemukan.');
     if (await inUseByTrips(this.prisma, { busId: id })) {
       throw new DomainError('VALIDATION_ERROR', 'Bus masih dipakai template aktif atau trip yang belum berangkat.');
     }
-    const before = await this.prisma.bus.findUniqueOrThrow({ where: { id } });
     const b = await this.prisma.bus.update({ where: { id }, data: { active: false } });
     await this.audit.write({ actorId: actor.id, actorName: actor.name, action: 'BUS_UPDATE', entity: 'bus', entityId: id, before, after: b });
     return b;
@@ -62,7 +64,8 @@ export class BusesService {
 
   /** spec §5.6: capacity change rejected if any SCHEDULED not-departed trip already has more booked; else propagate. */
   async setBusCapacity(id: string, capacity: number, actor: Actor) {
-    const bus = await this.prisma.bus.findUniqueOrThrow({ where: { id } });
+    const bus = await this.prisma.bus.findUnique({ where: { id } });
+    if (!bus) throw new DomainError('NOT_FOUND', 'Data tidak ditemukan.');
     const conflictTrip = await this.prisma.trip.findFirst({
       where: { busId: id, status: 'SCHEDULED', departureAt: { gt: new Date() }, bookedCount: { gt: capacity } },
     });
