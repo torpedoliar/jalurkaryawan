@@ -20,8 +20,9 @@ let userId: string;
 
 beforeAll(async () => {
   await prisma.$transaction([
+    prisma.refreshToken.deleteMany(), prisma.deviceToken.deleteMany(), // seeded/live rows hold user+stop FKs
     prisma.notification.deleteMany(), prisma.rejectedRequest.deleteMany(), prisma.booking.deleteMany(),
-    prisma.trip.deleteMany(), prisma.tripTemplate.deleteMany(), prisma.stop.deleteMany(),
+    prisma.trip.deleteMany(), prisma.tripTemplate.deleteMany(), prisma.subscription.deleteMany(), prisma.stop.deleteMany(),
     prisma.route.deleteMany(), prisma.bus.deleteMany(), prisma.vendor.deleteMany(),
     prisma.shift.deleteMany(), prisma.user.deleteMany(), prisma.auditLog.deleteMany(),
   ]);
@@ -50,8 +51,9 @@ beforeAll(async () => {
 // cross-suite hygiene: auth.test (runs first next run) must not trip Booking_userId_fkey
 afterAll(async () => {
   await prisma.$transaction([
+    prisma.refreshToken.deleteMany(), prisma.deviceToken.deleteMany(), // seeded/live rows hold user+stop FKs
     prisma.notification.deleteMany(), prisma.rejectedRequest.deleteMany(), prisma.booking.deleteMany(),
-    prisma.trip.deleteMany(), prisma.tripTemplate.deleteMany(), prisma.stop.deleteMany(),
+    prisma.trip.deleteMany(), prisma.tripTemplate.deleteMany(), prisma.subscription.deleteMany(), prisma.stop.deleteMany(),
     prisma.route.deleteMany(), prisma.bus.deleteMany(), prisma.vendor.deleteMany(),
     prisma.shift.deleteMany(), prisma.user.deleteMany(), prisma.auditLog.deleteMany(),
   ]);
@@ -121,6 +123,18 @@ describe('allocateSeat (spec §5.1)', () => {
     const rejected = await prisma.rejectedRequest.findFirst({ where: { userId: u.id } });
     expect(rejected).toBeTruthy();
     expect(rejected!.reason).toBe('TRIP_FULL');
+  });
+});
+
+// I3 + I1: booking view departureAt is Jakarta ISO (05:20+07:00, not 22:20Z); users/:id/bookings sorted date desc
+describe('booking views', () => {
+  test('myBookings/userBookings departureAt in Asia/Jakarta', async () => {
+    const mine = await bookings.myBookings(userId);
+    expect(mine.length).toBeGreaterThanOrEqual(1);
+    expect(mine[0]!.departureAt).toMatch(/T05:20:00\+07:00$/);
+    const admin = await bookings.userBookings(userId);
+    expect(admin.map((b) => b.id)).toEqual([...mine].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt)).map((b) => b.id));
+    await expect(bookings.userBookings('nobody')).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 });
 

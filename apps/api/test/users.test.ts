@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, test } from 'vitest';
 import { PrismaClient } from '@prisma/client';
+import argon2 from 'argon2';
 import { scryptSync } from 'node:crypto';
 import { UsersService } from '../src/users/users.service';
 import { AuditService } from '../src/audit/audit.service';
@@ -105,4 +106,14 @@ describe('import', () => {
     const k200 = await prisma.user.findUnique({ where: { nik: 'K200' } });
     expect(k200!.name).toBe('Updated2');
   });
+
+  // I6: argon2 runs before the interactive tx — 200 new rows must not hit the 5s tx timeout
+  test('commit 200 new rows within the default interactive-tx timeout; hash verifies', async () => {
+    const rows = Array.from({ length: 200 }, (_, i) => ({ nik: `BULK${i}`, name: `Bulk ${i}`, department: 'QC', phone: '' }));
+    const r = await users.importCommit(rows, actorSuper);
+    expect(r.passwords).toHaveLength(200);
+    const u = await prisma.user.findUniqueOrThrow({ where: { nik: 'BULK7' } });
+    const pw = r.passwords.find((x) => x.nik === 'BULK7')!.tempPassword;
+    expect(await argon2.verify(u.passwordHash!, pw)).toBe(true);
+  }, 120_000);
 });

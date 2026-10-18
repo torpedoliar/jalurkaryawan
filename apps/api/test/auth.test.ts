@@ -17,8 +17,10 @@ let settings: SettingsService;
 beforeAll(async () => {
   // children before parents (brief order violated RefreshToken_userId_fkey on re-runs)
   await prisma.$transaction([
+    prisma.booking.deleteMany(),
+    prisma.notification.deleteMany(), prisma.rejectedRequest.deleteMany(), // seeded/live rows hold user+stop FKs
     prisma.refreshToken.deleteMany(), prisma.deviceToken.deleteMany(), prisma.auditLog.deleteMany(),
-    prisma.user.deleteMany(),
+    prisma.subscription.deleteMany(), prisma.user.deleteMany(),
   ]);
   const audit = new AuditService(prisma);
   settings = new SettingsService(prisma, audit, key);

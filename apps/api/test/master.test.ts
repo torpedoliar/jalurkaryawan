@@ -18,6 +18,7 @@ let stops: StopsService;
 
 beforeAll(async () => {
   await prisma.$transaction([
+    prisma.refreshToken.deleteMany(), prisma.deviceToken.deleteMany(), prisma.notification.deleteMany(), // seeded/live rows hold user+stop FKs
     prisma.rejectedRequest.deleteMany(), prisma.trip.deleteMany(), prisma.tripTemplate.deleteMany(),
     prisma.booking.deleteMany(), prisma.subscription.deleteMany(),
     prisma.stop.deleteMany(), prisma.route.deleteMany(), prisma.bus.deleteMany(), prisma.vendor.deleteMany(),

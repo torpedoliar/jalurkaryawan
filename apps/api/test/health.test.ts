@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, test } from 'vitest';
+import { afterAll, beforeAll, expect, test } from 'vitest';
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { AppModule } from '../src/app.module';
@@ -13,6 +13,8 @@ beforeAll(async () => {
   // known http shape via raw fetch on the listening socket
   await app.listen(0);
 });
+
+afterAll(() => app.close());
 
 test('GET /api/health answers 200 {status:"ok"}', async () => {
   const base = await app.getUrl();

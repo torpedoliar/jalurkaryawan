@@ -22,8 +22,9 @@ beforeAll(async () => {
 // cross-suite hygiene: don't leave 100 users + bookings for the next file
 afterAll(async () => {
   await prisma.$transaction([
+    prisma.refreshToken.deleteMany(), prisma.deviceToken.deleteMany(), // seeded/live rows hold user+stop FKs
     prisma.notification.deleteMany(), prisma.rejectedRequest.deleteMany(), prisma.booking.deleteMany(),
-    prisma.trip.deleteMany(), prisma.tripTemplate.deleteMany(), prisma.stop.deleteMany(),
+    prisma.trip.deleteMany(), prisma.tripTemplate.deleteMany(), prisma.subscription.deleteMany(), prisma.stop.deleteMany(),
     prisma.route.deleteMany(), prisma.bus.deleteMany(), prisma.vendor.deleteMany(),
     prisma.shift.deleteMany(), prisma.user.deleteMany(), prisma.auditLog.deleteMany(),
   ]);
@@ -34,8 +35,9 @@ describe('concurrent allocation (spec §8: 100 concurrent → 50 OK / 50 TRIP_FU
   test('exactly capacity succeed, rest TRIP_FULL with rejected rows, booked_count == capacity', async () => {
     // clean fixture
     await prisma.$transaction([
+    prisma.refreshToken.deleteMany(), prisma.deviceToken.deleteMany(), prisma.notification.deleteMany(), // seeded/live rows hold user+stop FKs
       prisma.rejectedRequest.deleteMany(), prisma.booking.deleteMany(), prisma.trip.deleteMany(),
-      prisma.tripTemplate.deleteMany(), prisma.stop.deleteMany(), prisma.route.deleteMany(),
+      prisma.tripTemplate.deleteMany(), prisma.subscription.deleteMany(), prisma.stop.deleteMany(), prisma.route.deleteMany(),
       prisma.bus.deleteMany(), prisma.vendor.deleteMany(), prisma.shift.deleteMany(), prisma.user.deleteMany(),
     ]);
     const v = await prisma.vendor.create({ data: { name: 'V', contact: '' } });

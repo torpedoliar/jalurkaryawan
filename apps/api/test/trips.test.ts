@@ -30,8 +30,9 @@ const futureTrip = () => prisma.trip.findFirstOrThrow({
 
 beforeAll(async () => {
   await prisma.$transaction([
+    prisma.refreshToken.deleteMany(), prisma.deviceToken.deleteMany(), prisma.rejectedRequest.deleteMany(), // seeded/live rows hold user+stop FKs
     prisma.notification.deleteMany(), prisma.booking.deleteMany(), prisma.trip.deleteMany(),
-    prisma.tripTemplate.deleteMany(), prisma.stop.deleteMany(), prisma.route.deleteMany(),
+    prisma.tripTemplate.deleteMany(), prisma.subscription.deleteMany(), prisma.stop.deleteMany(), prisma.route.deleteMany(),
     prisma.bus.deleteMany(), prisma.vendor.deleteMany(), prisma.shift.deleteMany(), prisma.user.deleteMany(),
     prisma.auditLog.deleteMany(),
   ]);
@@ -66,8 +67,9 @@ beforeAll(async () => {
 // schema.test raw-inserts assume no leftover Route code R1; auth.test deletes users wholesale
 afterAll(async () => {
   await prisma.$transaction([
+    prisma.refreshToken.deleteMany(), prisma.deviceToken.deleteMany(), // seeded/live rows hold user+stop FKs
     prisma.rejectedRequest.deleteMany(), prisma.booking.deleteMany(), prisma.trip.deleteMany(),
-    prisma.tripTemplate.deleteMany(), prisma.stop.deleteMany(), prisma.route.deleteMany(),
+    prisma.tripTemplate.deleteMany(), prisma.subscription.deleteMany(), prisma.stop.deleteMany(), prisma.route.deleteMany(),
     prisma.bus.deleteMany(), prisma.vendor.deleteMany(), prisma.shift.deleteMany(),
     prisma.notification.deleteMany(), prisma.auditLog.deleteMany(), prisma.user.deleteMany(),
   ]);
@@ -126,6 +128,35 @@ describe('templates + propagation (spec §5.6)', () => {
     const n = await prisma.notification.findFirst({ where: { userId: user.id, type: 'SCHEDULE_CHANGED' } });
     expect(n).toBeTruthy();
   });
+
+  // I15: bookings carry route/shift/direction — changing them under BOOKED seats is rejected, naming the trip
+  test('route/shift/direction change rejected while a future trip holds BOOKED seats', async () => {
+    const trip = await futureTrip(); // holds the BOOKED row from the previous test
+    const tpl = await prisma.tripTemplate.findUniqueOrThrow({ where: { id: trip.templateId } });
+    const input = {
+      routeId: tpl.routeId, shiftId: tpl.shiftId, direction: 'DROPOFF' as const, busId: tpl.busId,
+      departureTime: tpl.departureTime, dayOffset: tpl.dayOffset as 0 | 1, weekdays: tpl.weekdays, active: true,
+    };
+    await expect(templates.update(tpl.id, input, actor)).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR', message: expect.stringContaining(`Trip ${trip.date} jam`),
+    });
+    const after = await prisma.trip.findUniqueOrThrow({ where: { id: trip.id } });
+    expect(after.direction).toBe(trip.direction); // nothing propagated
+  });
+
+  // R1: update fills the window immediately (mock parity) — a re-added weekday regenerates its trips
+  test('template update calls fillWindow: deleted unbooked future trips come back', async () => {
+    const tpl = await prisma.tripTemplate.findFirstOrThrow();
+    const victims = await prisma.trip.findMany({ where: { templateId: tpl.id, bookedCount: 0, bookings: { none: {} } } });
+    expect(victims.length).toBeGreaterThan(0);
+    await prisma.trip.deleteMany({ where: { id: { in: victims.map((t) => t.id) } } });
+    await templates.update(tpl.id, {
+      routeId: tpl.routeId, shiftId: tpl.shiftId, direction: tpl.direction as 'PICKUP' | 'DROPOFF', busId: tpl.busId,
+      departureTime: tpl.departureTime, dayOffset: tpl.dayOffset as 0 | 1, weekdays: tpl.weekdays, active: true,
+    }, actor);
+    const back = await prisma.trip.count({ where: { templateId: tpl.id, date: { in: victims.map((t) => t.date) } } });
+    expect(back).toBe(victims.length);
+  });
 });
 
 describe('trips endpoints', () => {
@@ -164,6 +195,19 @@ describe('trips endpoints', () => {
     const row = (await trips.list({ date: trip.date })).find((t) => t.id === trip.id);
     expect(row!.bookedCount).toBe(r.bookedCount); // trips list shows the lower count
     expect(row!.status).toBe('CANCELLED');
+  });
+
+  // E3: decrement equals rows actually flipped inside the tx
+  test('tripCancel decrement = flipped rows (interactive tx)', async () => {
+    const trip = await prisma.trip.findFirstOrThrow({ where: { status: 'SCHEDULED', departureAt: { gt: new Date() } }, orderBy: { departureAt: 'asc' } });
+    const u = await prisma.user.create({ data: { nik: 'K1003', name: 'Gamma', role: 'EMPLOYEE', active: true } });
+    await prisma.booking.create({
+      data: { userId: u.id, tripId: trip.id, routeId: trip.routeId, stopId: (await prisma.stop.findFirstOrThrow()).id, shiftId: trip.shiftId, direction: trip.direction, date: trip.date, status: 'BOOKED' },
+    });
+    await prisma.trip.update({ where: { id: trip.id }, data: { bookedCount: 5 } });
+    const r = await trips.tripCancel(trip.id, actor);
+    expect(r.bookedCount).toBe(4);
+    expect(await prisma.booking.count({ where: { tripId: trip.id, status: 'BOOKED' } })).toBe(0);
   });
 
   test('cancelDate cancels all SCHEDULED not-departed trips, returns count', async () => {
