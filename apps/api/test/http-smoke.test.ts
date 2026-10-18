@@ -5,6 +5,9 @@ import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import argon2 from 'argon2';
 import { AuditLog, BackupFile, LoginResponse, SystemStatus, addDays, jakartaDate } from '@bms/shared';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { AppModule } from '../src/app.module';
 import { BackupService } from '../src/backup/backup.service';
 import { BACKUP_JOB, SchedulerService } from '../src/scheduler/scheduler.service';
@@ -14,6 +17,7 @@ let app: NestExpressApplication;
 let base: string;
 let token: string;
 const suspendedUntil = addDays(jakartaDate(new Date()), 3);
+const BACKUP_DIR = join(tmpdir(), 'bms-smoke-backups');
 
 const wipe = () =>
   prisma.$transaction([
@@ -36,6 +40,9 @@ beforeAll(async () => {
   });
   await prisma.vendor.create({ data: { id: 'smoke-v', name: 'V', contact: '' } });
 
+  process.env.BACKUP_DIR = BACKUP_DIR; // read by BackupService's defaulted ctor param
+  mkdirSync(BACKUP_DIR, { recursive: true });
+  writeFileSync(join(BACKUP_DIR, 'bms-smoke.dump'), 'PGDMPsmoke');
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
   app = moduleRef.createNestApplication<NestExpressApplication>({ logger: false });
   app.useBodyParser('json', { limit: '10mb' }); // mirrors main.ts
@@ -51,6 +58,8 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await app?.close();
+  rmSync(BACKUP_DIR, { recursive: true, force: true });
+  delete process.env.BACKUP_DIR;
   await wipe();
   await prisma.$disconnect();
 });
@@ -111,6 +120,14 @@ describe('wiring + wire shapes', () => {
     expect(res.status).toBe(200);
     const rows = BackupFile.array().parse(await res.json());
     expect(rows[0]!.createdAt).toMatch(/\+07:00$/);
+  });
+
+  test('C2: GET /api/backups/:name/download streams the file with attachment headers (not 204)', async () => {
+    const res = await call('GET', '/api/backups/bms-smoke.dump/download');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('application/octet-stream');
+    expect(res.headers.get('content-disposition')).toBe('attachment; filename="bms-smoke.dump"');
+    expect(await res.text()).toBe('PGDMPsmoke');
   });
 
   test('I1: GET /api/system/status → 200 SystemStatus (public)', async () => {
