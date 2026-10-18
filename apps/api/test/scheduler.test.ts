@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, test } from 'vitest';
+import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import { PrismaClient } from '@prisma/client';
 import { SchedulerService } from '../src/scheduler/scheduler.service';
 import { SchedulerRegistry } from '@nestjs/schedule';
@@ -56,4 +56,11 @@ describe('scheduler registration', () => {
     scheduler.resumeAll();
     expect(scheduler.allPaused()).toBe(false);
   });
+});
+
+// hygiene (fix round 1): test 3 leaves real cron timers RUNNING (*/5 reminder hits test DB mid-suite).
+// Restore the shared settings row first (update re-registers+starts jobs via 'changed'), then pause.
+afterAll(() => {
+  settings.update({ generate_run_time: '00:30' }, { id: null, name: 'Admin' });
+  scheduler.pauseAll();
 });
