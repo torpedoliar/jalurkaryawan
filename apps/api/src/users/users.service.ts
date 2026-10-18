@@ -3,7 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import { randomBytes } from 'node:crypto';
 import argon2 from 'argon2';
 import {
-  ADMIN_ROLES, ImportRow, jakartaDate, type ImportPreview, type TempPassword, type UserInput, type UserSummary,
+  ADMIN_ROLES, ImportRow, type ImportPreview, type TempPassword, type UserInput, type UserSummary,
 } from '@bms/shared';
 import { DomainError } from '../common/domain-error';
 import { toUserSummary } from '../common/mappers';
@@ -101,26 +101,6 @@ export class UsersService {
     const after = toUserSummary(u);
     await this.audit.write({ actorId: actor.id, actorName: actor.name, action: 'USER_UPDATE', entity: 'user', entityId: id, before, after });
     return after;
-  }
-
-  async suspend(id: string, until: string, reason: string, actor: Actor): Promise<UserSummary> {
-    const u = await this.prisma.user.findUnique({ where: { id } });
-    if (!u) throw new DomainError('NOT_FOUND', 'Data tidak ditemukan.');
-    this.requireAdminRole(actor.role, u.role);
-    if (u.role !== 'EMPLOYEE') throw new DomainError('VALIDATION_ERROR', 'Pembekuan booking hanya untuk karyawan.');
-    if (until < jakartaDate(new Date())) throw new DomainError('VALIDATION_ERROR', 'Tanggal akhir pembekuan sudah lewat.');
-    const before = toUserSummary(u);
-    const updated = await this.prisma.user.update({
-      where: { id },
-      data: { bookingSuspendedUntil: new Date(`${until}T00:00:00+07:00`), suspendReason: reason },
-    });
-    await this.audit.write({ actorId: actor.id, actorName: actor.name, action: 'USER_SUSPEND', entity: 'user', entityId: id, before, after: toUserSummary(updated) });
-    return toUserSummary(updated);
-  }
-
-  /** Task 9 admin deactivate calls this before cancelling bookings. */
-  async deactivateSelfGuard(id: string, actorId: string): Promise<void> {
-    if (id === actorId) throw new DomainError('VALIDATION_ERROR', 'Tidak bisa menonaktifkan akun sendiri.');
   }
 
   async resetPassword(id: string, actor: Actor): Promise<{ userId: string; nik: string; tempPassword: string }> {

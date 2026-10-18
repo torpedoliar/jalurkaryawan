@@ -1,11 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
-import { isPastCutoff, isoWeekday, jakartaDate, type SubscriptionInput } from '@bms/shared';
+import { PrismaClient, type Subscription as SubscriptionRow } from '@prisma/client';
+import { isPastCutoff, isoWeekday, jakartaDate, toJakartaIso, type SubscriptionInput } from '@bms/shared';
 import { DomainError } from '../common/domain-error';
 import { SettingsService } from '../settings/settings.service';
 import { AllocateService } from './allocate.service';
-
-type Actor = { id: string | null; name: string };
 
 @Injectable()
 export class SubscriptionsService {
@@ -15,8 +13,15 @@ export class SubscriptionsService {
     private readonly settings: SettingsService,
   ) {}
 
-  list(userId: string) {
-    return this.prisma.subscription.findMany({ where: { userId }, orderBy: { createdAt: 'desc' } });
+  /** Contract `Subscription` wire shape: drop updatedAt, createdAt as +07:00 no-ms (mock nowIso parity). */
+  private toWire(s: SubscriptionRow): Omit<SubscriptionRow, 'updatedAt' | 'createdAt'> & { createdAt: string } {
+    const { updatedAt: _u, createdAt, ...rest } = s;
+    return { ...rest, createdAt: toJakartaIso(createdAt.getTime()) };
+  }
+
+  async list(userId: string) {
+    const rows = await this.prisma.subscription.findMany({ where: { userId }, orderBy: { createdAt: 'desc' } });
+    return rows.map((r) => this.toWire(r));
   }
 
   /** spec §5.3 create: book already-generated dates with cutoff check; later dates come from cron. */
@@ -70,20 +75,21 @@ export class SubscriptionsService {
         });
         booked.push(date);
       } catch (e) {
-        const code = (e as { code?: string }).code;
+        if (!(e instanceof DomainError)) throw e; // mock parity: only domain skips are swallowed
+        const code = e.code;
         if (code === 'CUTOFF_PASSED') skippedCutoff.push(date);
         else if (code === 'TRIP_FULL') rejected.push(date);
         // USER_SUSPENDED (per date), SCHEDULE_CONFLICT (daily booking exists) and NOT_FOUND: skip silently (mock parity)
       }
     }
-    return { subscription: sub, booked, rejected, skippedCutoff };
+    return { subscription: this.toWire(sub), booked, rejected, skippedCutoff };
   }
 
   /** spec §5.3 end. Idempotent on ENDED. */
   async end(userId: string, id: string) {
     const sub = await this.prisma.subscription.findUnique({ where: { id } });
     if (!sub || sub.userId !== userId) throw new DomainError('NOT_FOUND', 'Data tidak ditemukan.');
-    if (sub.status === 'ENDED') return sub;
+    if (sub.status === 'ENDED') return this.toWire(sub);
     const updated = await this.prisma.subscription.update({
       where: { id }, data: { status: 'ENDED', endDate: jakartaDate(new Date()) },
     });
@@ -98,7 +104,7 @@ export class SubscriptionsService {
       if (!b.trip || isPastCutoff(b.trip.departureAt.toISOString(), cutoffMin, now)) continue;
       await this.cancelBooking(b.id, b.tripId, 'SUBSCRIPTION_ENDED');
     }
-    return updated;
+    return this.toWire(updated);
   }
 
   private covers(s: { status: string; startDate: string; endDate: string | null; weekdays: number[] }, date: string): boolean {

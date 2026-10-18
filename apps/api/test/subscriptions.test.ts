@@ -86,10 +86,22 @@ describe('subscriptions (spec §5.2 / §5.6)', () => {
   });
 
   test('create: overlap same shift+direction → SCHEDULE_CONFLICT', async () => {
-    await subs.create(userId, subInput());
+    const r = await subs.create(userId, subInput());
+    // contract Subscription wire shape: no updatedAt, createdAt +07:00 no-ms (mock nowIso parity)
+    expect(r.subscription).not.toHaveProperty('updatedAt');
+    expect(r.subscription.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+07:00$/);
     await expect(subs.create(userId, subInput())).rejects.toMatchObject({
       code: 'SCHEDULE_CONFLICT', message: expect.stringContaining('bentrok'),
     });
+  });
+
+  test('list: contract wire shape — no updatedAt, createdAt +07:00 no-ms', async () => {
+    const rows = await subs.list(userId);
+    expect(rows.length).toBeGreaterThan(0);
+    for (const r of rows) {
+      expect(r).not.toHaveProperty('updatedAt');
+      expect(r.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+07:00$/);
+    }
   });
 
   test('generateSubscriptionBookings: re-books a non-purpose-cancelled date, idempotent', async () => {
@@ -108,8 +120,11 @@ describe('subscriptions (spec §5.2 / §5.6)', () => {
     const sub = await prisma.subscription.findFirstOrThrow({ where: { userId, status: 'ACTIVE' } });
     const r = await subs.end(userId, sub.id);
     expect(r.status).toBe('ENDED');
+    expect(r).not.toHaveProperty('updatedAt');
+    expect(r.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+07:00$/);
     const r2 = await subs.end(userId, sub.id); // idempotent
     expect(r2.status).toBe('ENDED');
+    expect(r2).not.toHaveProperty('updatedAt');
     const cancelled = await prisma.booking.count({ where: { subscriptionId: sub.id, cancelReason: 'SUBSCRIPTION_ENDED' } });
     expect(cancelled).toBeGreaterThanOrEqual(0);
   });

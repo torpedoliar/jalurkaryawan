@@ -6,6 +6,6 @@ import { UsersService } from './users.service';
 @Module({
   controllers: [UsersController],
   providers: [UsersService, PrismaClient],
-  exports: [UsersService], // Task 9 AdminService wraps suspend/deactivate guards
+  exports: [UsersService],
 })
 export class UsersModule {}

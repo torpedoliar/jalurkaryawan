@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { addDays, departureAt, isoWeekday, jakartaDate } from '@bms/shared';
+import { DomainError } from '../common/domain-error';
 import { SettingsService } from '../settings/settings.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AllocateService } from '../bookings/allocate.service';
@@ -95,7 +96,8 @@ export class GenerateService {
           date, source: 'SUBSCRIPTION', subscriptionId: sub.id, fromCron: true,
         });
       } catch (e) {
-        if ((e as { code?: string }).code === 'TRIP_FULL') {
+        if (!(e instanceof DomainError)) throw e; // mock parity (domain/generate.ts): only domain errors are non-fatal
+        if (e.code === 'TRIP_FULL') {
           // allocateSeat already inserted the rejected row; notify (mock data parity: { date })
           await this.notifications.insert(
             sub.userId, 'SUBSCRIPTION_REJECTED', 'Langganan tidak kebagian kursi',
@@ -103,7 +105,7 @@ export class GenerateService {
             { date },
           );
         }
-        // TRIP_FULL and other skips are non-fatal for the cron loop
+        // TRIP_FULL and other domain skips are non-fatal for the cron loop
       }
     }
   }
