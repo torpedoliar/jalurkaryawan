@@ -149,6 +149,21 @@ describe('trips endpoints', () => {
     expect(list.length).toBeGreaterThanOrEqual(1);
   });
 
+  test('tripCancel decrements bookedCount on response row (mock ADMIN_TRIP parity)', async () => {
+    const trip = await futureTrip();
+    const before = await prisma.trip.findUniqueOrThrow({ where: { id: trip.id } });
+    const flipped = await prisma.booking.count({ where: { tripId: trip.id, status: 'BOOKED' } });
+    expect(flipped).toBeGreaterThanOrEqual(1); // employee booking from the propagation test
+    const r = await trips.tripCancel(trip.id, actor);
+    expect(r.status).toBe('CANCELLED');
+    expect(r.bookedCount).toBe(Math.max(0, before.bookedCount - flipped));
+    const after = await prisma.trip.findUniqueOrThrow({ where: { id: trip.id } });
+    expect(after.bookedCount).toBe(r.bookedCount); // response row matches DB
+    const row = (await trips.list({ date: trip.date })).find((t) => t.id === trip.id);
+    expect(row!.bookedCount).toBe(r.bookedCount); // trips list shows the lower count
+    expect(row!.status).toBe('CANCELLED');
+  });
+
   test('cancelDate cancels all SCHEDULED not-departed trips, returns count', async () => {
     const today = jakartaDate(new Date());
     const r = await trips.cancelDate(today, actor);

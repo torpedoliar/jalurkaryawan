@@ -17,27 +17,37 @@ beforeAll(async () => {
   const settings = new SettingsService(prisma, audit, key);
   await settings.init();
   generate = new GenerateService(prisma, settings, new NotificationsService(prisma));
+  // stable fixture (upsert: re-runs are idempotent) — fills must produce rows for it
+  const v = await prisma.vendor.upsert({ where: { id: 'gv' }, create: { id: 'gv', name: 'GenV', contact: '' }, update: {} });
+  const bus = await prisma.bus.upsert({ where: { id: 'gbus' }, create: { id: 'gbus', plate: 'B GEN1', capacity: 30, vendorId: v.id }, update: {} });
+  const route = await prisma.route.upsert({ where: { id: 'groute' }, create: { id: 'groute', code: 'RG', name: 'Gen', color: '#000000' }, update: {} });
+  await prisma.shift.upsert({ where: { id: 'gen' }, create: { id: 'gen', name: 'Gen', startTime: '01:00', endTime: '02:00' }, update: {} });
+  await prisma.tripTemplate.upsert({
+    where: { id: 'gtpl' },
+    create: { id: 'gtpl', routeId: route.id, shiftId: 'gen', direction: 'PICKUP', busId: bus.id, departureTime: '23:50', dayOffset: 0, weekdays: [1, 2, 3, 4, 5, 6, 7], active: true },
+    update: { active: true, weekdays: [1, 2, 3, 4, 5, 6, 7] },
+  });
 });
 
 describe('generateTrips (spec §5.2)', () => {
   test('idempotent: same date twice creates only once', async () => {
     const date = jakartaDate(new Date());
-    const first = await generate.generateTrips(date);
+    await generate.generateTrips(date);
     const second = await generate.generateTrips(date);
     expect(second).toBe(0); // ON CONFLICT DO NOTHING
-    // total rows for date equals unique (template,date) combos
+    // fixture template's row for today exists exactly once (unique (templateId,date))
+    expect(await prisma.trip.count({ where: { templateId: 'gtpl', date } })).toBe(1);
     const rows = await prisma.trip.count({ where: { date } });
-    expect(rows).toBeGreaterThanOrEqual(first);
+    expect(rows).toBeGreaterThanOrEqual(1); // fixture row exists after generateTrips
   });
 
-  test('fillWindow covers generate_days_ahead days', async () => {
-    const total = await generate.fillWindow();
-    expect(total).toBeGreaterThanOrEqual(0);
+  test('fillWindow generates rows for the weekday-matched fixture template', async () => {
+    await generate.fillWindow();
     const today = jakartaDate(new Date());
     const tomorrow = addDays(today, 1);
-    // tomorrow's trips exist if a template weekday matches
-    const t = await prisma.tripTemplate.findFirst({ where: { active: true } });
-    if (t) expect(await prisma.trip.count({ where: { date: tomorrow } })).toBeGreaterThanOrEqual(0);
+    // weekdays 1-7: fixture template must have a trip for every generated window day
+    expect(await prisma.trip.count({ where: { templateId: 'gtpl', date: today } })).toBe(1);
+    expect(await prisma.trip.count({ where: { templateId: 'gtpl', date: tomorrow } })).toBe(1);
     expect(today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 });

@@ -77,8 +77,12 @@ export class TripsService {
     if (trip.departureAt <= new Date()) throw new DomainError('VALIDATION_ERROR', 'Trip sudah berangkat.');
 
     const bookings = await this.prisma.booking.findMany({ where: { tripId, status: 'BOOKED' } });
-    await this.prisma.$transaction([
-      this.prisma.trip.update({ where: { id: tripId }, data: { status: 'CANCELLED' } }),
+    // mock allocate ADMIN_TRIP parity: bookedCount-- per BOOKED row flipped
+    const [updated] = await this.prisma.$transaction([
+      this.prisma.trip.update({
+        where: { id: tripId },
+        data: { status: 'CANCELLED', bookedCount: { decrement: bookings.length } },
+      }),
       this.prisma.booking.updateMany({
         where: { tripId, status: 'BOOKED' },
         data: { status: 'CANCELLED', cancelReason: 'ADMIN_TRIP', cancelledAt: new Date() },
@@ -92,8 +96,8 @@ export class TripsService {
         { tripId },
       );
     }
-    await this.audit?.write({ actorId: actor.id, actorName: actor.name, action: 'TRIP_CANCEL', entity: 'trip', entityId: tripId, before: { status: trip.status }, after: { status: 'CANCELLED' } });
-    return this.toTripRow({ ...trip, status: 'CANCELLED' });
+    await this.audit?.write({ actorId: actor.id, actorName: actor.name, action: 'TRIP_CANCEL', entity: 'trip', entityId: tripId, before: { status: trip.status, bookedCount: trip.bookedCount }, after: { status: 'CANCELLED', bookedCount: updated.bookedCount } });
+    return this.toTripRow(updated);
   }
 
   /** mock POST /api/trips/cancel-date wire: { cancelled: n }. */

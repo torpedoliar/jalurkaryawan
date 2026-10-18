@@ -24,7 +24,7 @@ export class TripsController {
   @Delete('trip-templates/:id') @Roles('SUPER_ADMIN', 'ADMIN_GA')
   deactivateTemplate(@Param('id') id: string, @Req() r: ActorReq) { return this.templates.deactivate(id, r.user!); }
 
-  @Get('trips') // ANY logged-in user (no @Roles)
+  @Get('trips') @Roles('SUPER_ADMIN', 'ADMIN_GA') // mock trips.ts gates with ADMIN_ROLES
   listTrips(@Query('date') date?: string, @Query('routeId') routeId?: string, @Query('shiftId') shiftId?: string) {
     return this.trips.list({ date, routeId, shiftId });
   }
