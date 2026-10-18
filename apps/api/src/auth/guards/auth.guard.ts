@@ -39,7 +39,8 @@ export class AuthGuard implements CanActivate {
       if (isPublic) { req.user = null; return true; }
       throw new DomainError('UNAUTHORIZED', ERROR_MESSAGES.UNAUTHORIZED);
     }
-    if (user.mustChangePassword && !allowMustChange) {
+    // mustChange gate applies to authenticated routes only — public routes (re-login/logout) must not 403
+    if (!isPublic && user.mustChangePassword && !allowMustChange) {
       throw new DomainError('FORBIDDEN', 'Ganti password terlebih dahulu.');
     }
     req.user = user;

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, Post, Req, Res, UseGuards, UsePipes } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, Post, Req, Res, UseGuards, UsePipes } from '@nestjs/common';
 import type { Response } from 'express';
 import { ChangePasswordRequest, LoginRequest, REFRESH_COOKIE, SetupRequest } from '@bms/shared';
 import { z } from 'zod';
@@ -23,12 +23,13 @@ function setRefreshCookie(res: Response, token: string): void {
   res.cookie(REFRESH_COOKIE, token, { path: '/api/auth', httpOnly: true, secure: true, sameSite: 'strict' });
 }
 
-@Controller('auth')
+/** Paths mirror ENDPOINTS (mock wire parity): setup + device-tokens live outside /api/auth. */
+@Controller()
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
   @Public()
-  @Post('login')
+  @Post('auth/login')
   @UseGuards(LoginRateLimitGuard)
   @UsePipes(new ZodPipe(LoginRequest))
   async login(@Body() body: { nik: string; password: string }, @Req() req: { ip: string }, @Res({ passthrough: true }) res: Response) {
@@ -38,7 +39,7 @@ export class AuthController {
   }
 
   @Public()
-  @Post('refresh')
+  @Post('auth/refresh')
   async refresh(
     @Body() body: unknown,
     @Headers('content-type') ct: string | undefined,
@@ -55,7 +56,7 @@ export class AuthController {
   }
 
   @Public()
-  @Post('logout')
+  @Post('auth/logout')
   async logout(@Body() body: unknown, @Headers('cookie') cookie: string | undefined, @Res({ passthrough: true }) res: Response) {
     const token = (body as { refreshToken?: string } | undefined)?.refreshToken ?? readCookie(cookie, REFRESH_COOKIE);
     await this.auth.logout(token);
@@ -63,13 +64,13 @@ export class AuthController {
     // undefined → 204 via ResponseInterceptor
   }
 
-  @Get('me')
+  @Get('auth/me')
   @AllowMustChange()
   me(@Req() req: { user: { id: string } }) {
     return this.auth.me(req.user.id);
   }
 
-  @Post('change-password')
+  @Post('auth/change-password')
   @AllowMustChange()
   @UsePipes(new ZodPipe(ChangePasswordRequest))
   async changePassword(@Req() req: { user: { id: string } }, @Body() body: { currentPassword: string; newPassword: string }) {
@@ -78,7 +79,7 @@ export class AuthController {
   }
 
   @Public()
-  @Get('setup-status')
+  @Get('setup/status')
   setupStatus() {
     return this.auth.setupStatus();
   }
@@ -99,7 +100,7 @@ export class AuthController {
     // 204
   }
 
-  @Post('device-tokens/delete')
+  @Delete('device-tokens')
   @UsePipes(new ZodPipe(z.object({ token: z.string().min(1) })))
   async deleteToken(@Req() req: { user: { id: string } }, @Body() body: { token: string }) {
     await this.auth.removeDeviceToken(req.user.id, body.token);

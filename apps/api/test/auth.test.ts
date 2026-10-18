@@ -82,14 +82,14 @@ describe('login', () => {
 });
 
 describe('refresh rotation', () => {
-  test('valid refresh rotates; reuse of old token is UNAUTHORIZED', async () => {
+  test('valid refresh rotates; reuse of old token revokes family — successor also fails', async () => {
     await makeUser('K5');
     const first = await auth.login('K5', 'demo1234', '127.0.0.1');
     const second = await auth.refresh(first.refreshToken!);
     expect(second.accessToken).toBeTruthy();
+    // reuse detected → revokeAll: successor token dies too, re-login required
     await expect(auth.refresh(first.refreshToken!)).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
-    const third = await auth.refresh(second.refreshToken!);
-    expect(third.accessToken).toBeTruthy();
+    await expect(auth.refresh(second.refreshToken!)).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
   });
 
   test('garbage refresh → UNAUTHORIZED', async () => {

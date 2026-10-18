@@ -3,7 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { PrismaClient } from '@prisma/client';
 import { createHash, randomBytes } from 'node:crypto';
 import argon2 from 'argon2';
-import { ERROR_MESSAGES, LoginResponse, Me, SetupRequest } from '@bms/shared';
+import { ERROR_MESSAGES, jakartaDate, LoginResponse, Me, SetupRequest } from '@bms/shared';
 import { DomainError } from '../common/domain-error';
 import { SettingsService } from '../settings/settings.service';
 import { AuditService } from '../audit/audit.service';
@@ -62,10 +62,22 @@ export class AuthService {
 
   async refresh(refreshToken: string): Promise<LoginResponse & { refreshToken: string }> {
     const row = await this.prisma.refreshToken.findUnique({ where: { tokenHash: sha256(refreshToken) } });
-    if (!row || row.revokedAt || row.expiresAt < new Date()) {
+    if (!row) throw new DomainError('UNAUTHORIZED', ERROR_MESSAGES.UNAUTHORIZED);
+    if (row.revokedAt) {
+      // reuse of a used/revoked token → revoke the whole family, then fail (re-login)
+      await this.revokeAll(row.userId);
       throw new DomainError('UNAUTHORIZED', ERROR_MESSAGES.UNAUTHORIZED);
     }
-    await this.prisma.refreshToken.update({ where: { id: row.id }, data: { revokedAt: new Date() } }); // rotate
+    if (row.expiresAt < new Date()) throw new DomainError('UNAUTHORIZED', ERROR_MESSAGES.UNAUTHORIZED);
+    // atomic rotate: only one caller may move revokedAt null→set; loser is reuse
+    const { count } = await this.prisma.refreshToken.updateMany({
+      where: { id: row.id, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    if (count !== 1) {
+      await this.revokeAll(row.userId);
+      throw new DomainError('UNAUTHORIZED', ERROR_MESSAGES.UNAUTHORIZED);
+    }
     const user = await this.prisma.user.findFirst({ where: { id: row.userId, active: true } });
     if (!user) throw new DomainError('UNAUTHORIZED', ERROR_MESSAGES.UNAUTHORIZED);
     const t = await this.issueTokens(user.id);
@@ -143,8 +155,7 @@ export class AuthService {
     id: string; nik: string; name: string; role: string; vendorId: string | null;
     mustChangePassword: boolean; bookingSuspendedUntil: Date | null; suspendReason: string | null;
   }): Me {
-    const todayMs = Date.now() - 7 * 3600_000; // rough Jakarta 'today' boundary for expiry check
-    const expired = !!u.bookingSuspendedUntil && u.bookingSuspendedUntil.getTime() < todayMs;
+    const expired = !!u.bookingSuspendedUntil && jakartaDate(u.bookingSuspendedUntil) < jakartaDate(new Date());
     return {
       id: u.id, nik: u.nik, name: u.name, role: u.role as Me['role'], vendorId: u.vendorId,
       mustChangePassword: u.mustChangePassword,
