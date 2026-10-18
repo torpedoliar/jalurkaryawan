@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "border-accent-on-rounded",
+        "value": "*",
+        "files": [
+          "apps/web/src/styles.css"
+        ],
+        "createdAt": "2026-10-18T00:35:27.892Z",
+        "reason": "Claude: L28 .who has no border-radius; 3px border-bottom is a section divider under the nav user block, not an accent on a rounded card"
+      }
+    ]
+  }
+}
