@@ -2,6 +2,7 @@ node_modules/
 dist/
 coverage/
 .env
+infra/certs/
 *.log
 apps/web/test-results/
 apps/web/playwright-report/
