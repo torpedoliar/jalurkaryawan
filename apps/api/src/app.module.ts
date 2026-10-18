@@ -5,10 +5,11 @@ import { AllExceptionsFilter } from './common/all-exceptions.filter';
 import { ResponseInterceptor } from './common/response.interceptor';
 import { MaintenanceGuard } from './common/guards/maintenance.guard';
 import { SettingsModule } from './settings/settings.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   controllers: [HealthController],
-  imports: [SettingsModule],
+  imports: [SettingsModule, AuthModule],
   providers: [
     MaintenanceGuard,
     { provide: APP_GUARD, useExisting: MaintenanceGuard },
