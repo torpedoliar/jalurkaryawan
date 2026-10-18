@@ -182,23 +182,30 @@ describe('report date query validation', () => {
     expect(await res.json()).toEqual({ code: 'VALIDATION_ERROR', message });
   };
 
-  test('GET /api/reports/dashboard?date=abc → 400 date: Format tanggal YYYY-MM-DD', async () => {
-    await expect400('/api/reports/dashboard?date=abc', 'date: Format tanggal YYYY-MM-DD');
+  test('GET /api/reports/dashboard?date=abc → 400 body: Format tanggal YYYY-MM-DD', async () => {
+    await expect400('/api/reports/dashboard?date=abc', 'body: Format tanggal YYYY-MM-DD');
   });
 
-  test('GET /api/reports/occupancy?from=abc → 400 from: Format tanggal YYYY-MM-DD', async () => {
-    await expect400('/api/reports/occupancy?from=abc', 'from: Format tanggal YYYY-MM-DD');
+  test('GET /api/reports/occupancy?from=abc → 400 body: Format tanggal YYYY-MM-DD', async () => {
+    await expect400('/api/reports/occupancy?from=abc', 'body: Format tanggal YYYY-MM-DD');
   });
 
-  test('GET /api/reports/occupancy?to=abc → 400 to: Format tanggal YYYY-MM-DD', async () => {
-    await expect400('/api/reports/occupancy?to=abc', 'to: Format tanggal YYYY-MM-DD');
+  test('GET /api/reports/occupancy?to=abc → 400 body: Format tanggal YYYY-MM-DD', async () => {
+    await expect400('/api/reports/occupancy?to=abc', 'body: Format tanggal YYYY-MM-DD');
   });
 
-  test('GET /api/reports/rejected?from=abc → 400 from: Format tanggal YYYY-MM-DD', async () => {
-    await expect400('/api/reports/rejected?from=abc', 'from: Format tanggal YYYY-MM-DD');
+  test('GET /api/reports/rejected?from=abc → 400 body: Format tanggal YYYY-MM-DD', async () => {
+    await expect400('/api/reports/rejected?from=abc', 'body: Format tanggal YYYY-MM-DD');
   });
 
-  test('GET /api/reports/rejected?to=abc → 400 to: Format tanggal YYYY-MM-DD', async () => {
-    await expect400('/api/reports/rejected?to=abc', 'to: Format tanggal YYYY-MM-DD');
+  test('GET /api/reports/rejected?to=abc → 400 body: Format tanggal YYYY-MM-DD', async () => {
+    await expect400('/api/reports/rejected?to=abc', 'body: Format tanggal YYYY-MM-DD');
+  });
+
+  test('GET /api/reports/dashboard?date= (empty) → treated as absent, 200 default date', async () => {
+    const res = await get('/api/reports/dashboard?date=');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { date: string };
+    expect(body.date).toBe(jakartaDate(new Date()));
   });
 });

@@ -7,9 +7,12 @@ import { ReportsService } from './reports.service';
 
 type ActorReq = { user: { id: string | null; name: string; role: string } };
 
-/** Param-named so zodMessage yields `date:`/`from:`/`to:` paths (mock IsoDate.parse parity, fix round 1). */
-const DashboardQuery = z.object({ date: IsoDate.optional() });
-const RangeQuery = z.object({ from: IsoDate.optional(), to: IsoDate.optional() });
+/**
+ * Fix round 2: bare scalar parse (no object wrapper) keeps the zod issue path `[]`
+ * so zodMessage emits the literal mock `body: …` prefix; mock q() `|| null` treats
+ * an empty param as absent → default.
+ */
+const ReportDate = z.preprocess((v) => (v === '' ? undefined : v), IsoDate.optional());
 
 /** Paths mirror ENDPOINTS: /api/reports/*, /api/me/notifications*. */
 @Controller()
@@ -17,15 +20,21 @@ export class ReportsController {
   constructor(private readonly reports: ReportsService) {}
 
   @Get('reports/dashboard') @Roles('SUPER_ADMIN', 'ADMIN_GA', 'VENDOR')
-  dashboard(@Query(new ZodPipe(DashboardQuery)) q: z.infer<typeof DashboardQuery>, @Req() r: ActorReq) {
-    return this.reports.dashboard(r.user, q.date);
+  dashboard(@Req() r: ActorReq, @Query('date', new ZodPipe(ReportDate)) date?: string) {
+    return this.reports.dashboard(r.user, date);
   }
 
   @Get('reports/occupancy') @Roles('SUPER_ADMIN', 'ADMIN_GA', 'VENDOR')
-  occupancy(@Query(new ZodPipe(RangeQuery)) q: z.infer<typeof RangeQuery>) { return this.reports.occupancy(q.from, q.to); }
+  occupancy(
+    @Query('from', new ZodPipe(ReportDate)) from?: string,
+    @Query('to', new ZodPipe(ReportDate)) to?: string,
+  ) { return this.reports.occupancy(from, to); }
 
   @Get('reports/rejected') @Roles('SUPER_ADMIN', 'ADMIN_GA', 'VENDOR')
-  rejected(@Query(new ZodPipe(RangeQuery)) q: z.infer<typeof RangeQuery>) { return this.reports.rejected(q.from, q.to); }
+  rejected(
+    @Query('from', new ZodPipe(ReportDate)) from?: string,
+    @Query('to', new ZodPipe(ReportDate)) to?: string,
+  ) { return this.reports.rejected(from, to); }
 
   @Get('reports/no-show-candidates') @Roles('SUPER_ADMIN', 'ADMIN_GA')
   noShow() { return this.reports.noShowCandidates(); }
