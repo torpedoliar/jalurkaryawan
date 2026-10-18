@@ -4,9 +4,10 @@ import { TripsController } from './trips.controller';
 import { TemplatesService } from './templates.service';
 import { TripsService } from './trips.service';
 import { GenerateService } from '../generate/generate.service';
+import { AllocateService } from '../bookings/allocate.service';
 
 @Module({
   controllers: [TripsController],
-  providers: [TemplatesService, TripsService, GenerateService, PrismaClient],
+  providers: [TemplatesService, TripsService, GenerateService, AllocateService, PrismaClient],
 })
 export class TripsModule {}

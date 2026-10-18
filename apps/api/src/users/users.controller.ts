@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Post, Put, Query, Req, UsePipes } from '@nestjs/common';
-import { ImportRequest, SuspendRequest, UserInput } from '@bms/shared';
+import { ImportRequest, UserInput } from '@bms/shared';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { ZodPipe } from '../common/zod-body.pipe';
 import { UsersService } from './users.service';
@@ -34,13 +34,6 @@ export class UsersController {
   @Roles('SUPER_ADMIN', 'ADMIN_GA')
   reset(@Param('id') id: string, @Req() r: ActorReq) {
     return this.users.resetPassword(id, r.user);
-  }
-
-  @Post(':id/suspend')
-  @Roles('SUPER_ADMIN', 'ADMIN_GA')
-  @UsePipes(new ZodPipe(SuspendRequest))
-  suspend(@Param('id') id: string, @Body() b: { until: string; reason: string }, @Req() r: ActorReq) {
-    return this.users.suspend(id, b.until, b.reason, r.user);
   }
 
   @Post('import/preview')

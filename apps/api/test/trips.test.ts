@@ -7,6 +7,7 @@ import { TemplatesService } from '../src/trips/templates.service';
 import { TripsService } from '../src/trips/trips.service';
 import { GenerateService } from '../src/generate/generate.service';
 import { NotificationsService } from '../src/notifications/notifications.service';
+import { AllocateService } from '../src/bookings/allocate.service';
 import { AuditService } from '../src/audit/audit.service';
 import { SettingsService } from '../src/settings/settings.service';
 
@@ -43,7 +44,7 @@ beforeAll(async () => {
   const settings = new SettingsService(prisma, audit, key);
   await settings.init();
   notifications = new NotificationsService(prisma);
-  generate = new GenerateService(prisma, settings, notifications);
+  generate = new GenerateService(prisma, settings, notifications, new AllocateService(prisma, settings));
   templates = new TemplatesService(prisma, audit, generate, notifications, settings);
   trips = new TripsService(prisma, settings, notifications);
 

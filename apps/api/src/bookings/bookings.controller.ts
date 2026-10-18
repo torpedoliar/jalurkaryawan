@@ -1,16 +1,20 @@
 import { Body, Controller, Get, Param, Post, Query, Req, UsePipes } from '@nestjs/common';
-import { DailyBookingRequest } from '@bms/shared';
+import { DailyBookingRequest, SubscriptionInput } from '@bms/shared';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { ZodPipe } from '../common/zod-body.pipe';
 import { BookingsService } from './bookings.service';
+import { SubscriptionsService } from './subscriptions.service';
 
 type EmpReq = { user: { id: string } };
 
-/** Paths mirror ENDPOINTS: /me/bookings, /bookings, /bookings/:id/cancel. */
+/** Paths mirror ENDPOINTS: /me/bookings, /bookings, /bookings/:id/cancel, /me/subscriptions, /subscriptions. */
 @Controller()
 @Roles('EMPLOYEE') // employee-only endpoints (mock bookingHandlers gate EMPLOYEE)
 export class BookingsController {
-  constructor(private readonly bookings: BookingsService) {}
+  constructor(
+    private readonly bookings: BookingsService,
+    private readonly subs: SubscriptionsService,
+  ) {}
 
   @Get('me/bookings')
   my(@Req() r: EmpReq, @Query('from') from?: string, @Query('to') to?: string) {
@@ -26,5 +30,21 @@ export class BookingsController {
   @Post('bookings/:id/cancel')
   cancel(@Param('id') id: string, @Req() r: EmpReq) {
     return this.bookings.cancelBooking(id, r.user.id);
+  }
+
+  @Get('me/subscriptions')
+  listSubs(@Req() r: EmpReq) {
+    return this.subs.list(r.user.id);
+  }
+
+  @Post('subscriptions')
+  @UsePipes(new ZodPipe(SubscriptionInput))
+  createSub(@Req() r: EmpReq, @Body() b: SubscriptionInput) {
+    return this.subs.create(r.user.id, b);
+  }
+
+  @Post('subscriptions/:id/end')
+  endSub(@Param('id') id: string, @Req() r: EmpReq) {
+    return this.subs.end(r.user.id, id);
   }
 }
