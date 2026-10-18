@@ -1,0 +1,273 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Vendor {
+  id        String   @id @default(cuid())
+  name      String
+  contact   String   @default("")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  buses     Bus[]
+  users     User[]
+}
+
+model Bus {
+  id        String   @id @default(cuid())
+  plate     String   @unique
+  capacity  Int
+  vendorId  String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  vendor    Vendor   @relation(fields: [vendorId], references: [id])
+  templates TripTemplate[]
+  trips     Trip[]
+}
+
+model Shift {
+  id        String   @id
+  name      String
+  startTime String
+  endTime   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  templates TripTemplate[]
+  trips     Trip[]
+  bookings  Booking[]
+  subs      Subscription[]
+}
+
+model Route {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  color     String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  stops     Stop[]
+  templates TripTemplate[]
+  trips     Trip[]
+  bookings  Booking[]
+  subs      Subscription[]
+}
+
+model Stop {
+  id            String   @id @default(cuid())
+  routeId       String
+  name          String
+  seq           Int
+  offsetMinutes Int
+  lat           Float?
+  lng           Float?
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  route         Route    @relation(fields: [routeId], references: [id])
+  bookings      Booking[]
+  subs          Subscription[]
+
+  @@unique([routeId, seq])
+}
+
+model User {
+  id                    String    @id @default(cuid())
+  nik                   String    @unique
+  name                  String
+  department            String    @default("")
+  phone                 String    @default("")
+  role                  String    // EMPLOYEE | ADMIN_GA | SUPER_ADMIN | VENDOR
+  vendorId              String?
+  passwordHash          String?
+  authProvider          String    @default("LOCAL") // LOCAL | SSO
+  active                Boolean   @default(true)
+  mustChangePassword    Boolean   @default(false)
+  bookingSuspendedUntil DateTime?
+  suspendReason         String?
+  failedLogins          Int       @default(0)
+  lockedUntil           DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  vendor                Vendor?   @relation(fields: [vendorId], references: [id])
+  refreshTokens         RefreshToken[]
+  deviceTokens          DeviceToken[]
+  bookings              Booking[]
+  subs                  Subscription[]
+  notifications         Notification[]
+  auditLogs             AuditLog[]  @relation("AuditActor")
+}
+
+model TripTemplate {
+  id            String   @id @default(cuid())
+  routeId       String
+  shiftId       String
+  direction     String   // PICKUP | DROPOFF
+  busId         String
+  departureTime String   // HH:mm
+  dayOffset     Int      @default(0)
+  weekdays      Int[]    // 1=Mon .. 7=Sun
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  route         Route    @relation(fields: [routeId], references: [id])
+  shift         Shift    @relation(fields: [shiftId], references: [id])
+  bus           Bus      @relation(fields: [busId], references: [id])
+  trips         Trip[]
+}
+
+model Trip {
+  id          String        @id @default(cuid())
+  templateId  String
+  date        String        // YYYY-MM-DD operational date (Asia/Jakarta)
+  departureAt DateTime
+  status      String        @default("SCHEDULED") // SCHEDULED | CANCELLED | DEPARTED
+  bookedCount Int           @default(0)
+  capacity    Int
+  routeId     String
+  shiftId     String
+  direction   String
+  busId       String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  template    TripTemplate  @relation(fields: [templateId], references: [id])
+  route       Route         @relation(fields: [routeId], references: [id])
+  shift       Shift         @relation(fields: [shiftId], references: [id])
+  bus         Bus           @relation(fields: [busId], references: [id])
+  bookings    Booking[]
+  rejected    RejectedRequest[]
+
+  @@unique([templateId, date])
+  @@index([routeId, shiftId, direction, date])
+}
+
+model Booking {
+  id             String        @id @default(cuid())
+  userId         String
+  tripId         String?
+  routeId        String
+  stopId         String
+  shiftId        String
+  direction      String
+  date           String
+  status         String        @default("BOOKED") // BOOKED | CANCELLED | NO_SHOW
+  source         String        @default("DAILY") // DAILY | SUBSCRIPTION
+  subscriptionId String?
+  cancelReason   String?
+  cancelledAt    DateTime?
+  reminderSentAt DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  user           User          @relation(fields: [userId], references: [id])
+  trip           Trip?         @relation(fields: [tripId], references: [id])
+  route          Route         @relation(fields: [routeId], references: [id])
+  stop           Stop          @relation(fields: [stopId], references: [id])
+  shift          Shift         @relation(fields: [shiftId], references: [id])
+  subscription   Subscription? @relation(fields: [subscriptionId], references: [id])
+  // partial unique (userId,date,shiftId,direction) WHERE status='BOOKED' added in migration.sql
+}
+
+model Subscription {
+  id        String    @id @default(cuid())
+  userId    String
+  routeId   String
+  stopId    String
+  shiftId   String
+  direction String
+  startDate String
+  endDate   String?
+  weekdays  Int[]
+  status    String    @default("ACTIVE") // ACTIVE | ENDED
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  user      User      @relation(fields: [userId], references: [id])
+  route     Route     @relation(fields: [routeId], references: [id])
+  stop      Stop      @relation(fields: [stopId], references: [id])
+  shift     Shift     @relation(fields: [shiftId], references: [id])
+  bookings  Booking[]
+}
+
+model RejectedRequest {
+  id             String   @id @default(cuid())
+  userId         String
+  tripId         String?
+  routeId        String
+  stopId         String?
+  shiftId        String
+  direction      String
+  date           String
+  reason         String   // TRIP_FULL | SUBSCRIPTION_REJECTED
+  source         String   @default("DAILY")
+  subscriptionId String?
+  createdAt      DateTime @default(now())
+  trip           Trip?    @relation(fields: [tripId], references: [id])
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id])
+}
+
+model DeviceToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String
+  platform  String   // android | ios | web
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, token])
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  body      String
+  data      Json?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  actorName String
+  action    String
+  entity    String
+  entityId  String
+  before    Json?
+  after     Json?
+  createdAt DateTime @default(now())
+  actor     User?    @relation("AuditActor", fields: [actorId], references: [id])
+}
+
+model Setting {
+  key       String   @id
+  value     Json
+  isSecret  Boolean  @default(false)
+  updatedAt DateTime @updatedAt
+}
+
+model Backup {
+  id            String   @id @default(cuid())
+  name          String   @unique
+  sizeBytes     Int
+  copiedToShare Boolean  @default(false)
+  createdAt     DateTime @default(now())
+}
