@@ -47,26 +47,24 @@ describe('settings service', () => {
     expect(s.backup_share_path).toBe('');
   });
 
-  test('out-of-range update rejected with shared schema message', () => {
-    expect(() => svc.update({ booking_cutoff_minutes: 9999 } as never, { id: 'a', name: 'A' })).toThrow(/1440/);
+  test('out-of-range update rejected with shared schema message', async () => {
+    await expect(svc.update({ booking_cutoff_minutes: 9999 } as never, { id: 'a', name: 'A' })).rejects.toThrow(/1440/);
     expect(svc.get().booking_cutoff_minutes).toBe(120);
   });
 
   test('valid update applies live, emits onChanged, writes audit', async () => {
     let fired = 0;
     svc.onChanged.on('changed', () => fired++);
-    const view = svc.update({ booking_cutoff_minutes: 90 }, { id: 'a', name: 'Admin' });
+    const view = await svc.update({ booking_cutoff_minutes: 90 }, { id: 'a', name: 'Admin' });
     expect(svc.get().booking_cutoff_minutes).toBe(90);
     expect(fired).toBe(1);
     expect(view.booking_cutoff_minutes).toBe(90);
-    await new Promise((r) => setTimeout(r, 100)); // DB write is async tx
     const log = await prisma.auditLog.findFirst({ where: { action: 'SETTINGS_UPDATE' }, orderBy: { createdAt: 'desc' } });
     expect(log).toBeTruthy();
   });
 
   test('secret stored ciphertext, read decrypted, view isSet only, audit masked', async () => {
-    svc.update({ fcm_service_account: '{"type":"service_account","project_id":"p","private_key":"k","client_email":"a@b.c"}' }, { id: 'a', name: 'Admin' });
-    await new Promise((r) => setTimeout(r, 100));
+    await svc.update({ fcm_service_account: '{"type":"service_account","project_id":"p","private_key":"k","client_email":"a@b.c"}' }, { id: 'a', name: 'Admin' });
     const row = await prisma.setting.findUnique({ where: { key: 'fcm_service_account' } });
     expect(String(row!.value)).not.toContain('service_account'); // ciphertext in DB
     expect(svc.get().fcm_service_account).toContain('service_account'); // decrypted in cache

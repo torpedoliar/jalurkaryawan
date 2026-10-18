@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { Prisma, PrismaClient } from '@prisma/client';
 import type { NotificationType } from '@bms/shared';
 import { toJakartaIso } from '@bms/shared';
@@ -11,12 +11,15 @@ import { SettingsService } from '../settings/settings.service';
  */
 @Injectable()
 export class NotificationsService {
+  private readonly logger = new Logger(NotificationsService.name);
+
   constructor(
     private readonly prisma: PrismaClient,
     private readonly fcm: FcmService,
     private readonly settings: SettingsService,
   ) {}
 
+  /** spec §5.7: every notification is stored THEN pushed — single entry point for all callers. */
   async insert(
     userId: string,
     type: NotificationType,
@@ -24,36 +27,25 @@ export class NotificationsService {
     body: string,
     data?: Record<string, string>,
   ): Promise<void> {
-    await this.prisma.notification.create({
-      data: { userId, type, title, body, data: (data ?? {}) as Prisma.InputJsonValue },
-    });
+    await this.sendToUser(userId, type, title, body, data);
   }
 
-  async insertMany(
-    userIds: string[],
-    type: NotificationType,
-    title: string,
-    body: string,
-    data?: Record<string, string>,
-  ): Promise<void> {
-    if (!userIds.length) return;
-    await this.prisma.notification.createMany({
-      data: userIds.map((userId) => ({ userId, type, title, body, data: (data ?? {}) as Prisma.InputJsonValue })),
-    });
-  }
-
-  /** Insert row then (if push_enabled) push to user's devices. Failure logged, no retry. */
+  /** Insert row then (if push_enabled) push to user's devices. Push failure logged, never thrown, no retry. */
   async sendToUser(userId: string, type: NotificationType, title: string, body: string, data?: Record<string, string>) {
     const n = await this.prisma.notification.create({
       data: { userId, type, title, body, data: (data ?? {}) as Prisma.InputJsonValue },
     });
     if (this.settings.get().push_enabled) {
-      const devices = await this.prisma.deviceToken.findMany({ where: { userId } });
-      if (devices.length) {
-        await this.fcm.send(
-          devices.map((d) => ({ token: d.token, platform: d.platform as 'android' | 'ios' | 'web' })),
-          title, body, data ?? {},
-        );
+      try {
+        const devices = await this.prisma.deviceToken.findMany({ where: { userId } });
+        if (devices.length) {
+          await this.fcm.send(
+            devices.map((d) => ({ token: d.token, platform: d.platform as 'android' | 'ios' | 'web' })),
+            title, body, data ?? {},
+          );
+        }
+      } catch (e) {
+        this.logger.warn(`push to ${userId} failed: ${(e as Error).message}`);
       }
     }
     return n;

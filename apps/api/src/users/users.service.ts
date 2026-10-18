@@ -151,26 +151,35 @@ export class UsersService {
   async importCommit(rows: Record<string, unknown>[], actor: { id: string | null; name: string }): Promise<{ passwords: TempPassword[] }> {
     const passwords: TempPassword[] = [];
     const summary = { created: 0, updated: 0 };
+    const valid = new Map<string, ImportRow>(); // nik → first row (preview already validated; skip bad/dup)
+    for (const raw of rows) {
+      const parsed = ImportRow.safeParse(coerceCells(raw));
+      if (parsed.success && !valid.has(parsed.data.nik)) valid.set(parsed.data.nik, parsed.data);
+    }
+    // argon2 is slow: hash OUTSIDE the interactive tx (default 5s timeout) for niks not yet in the DB
+    const known = new Set((await this.prisma.user.findMany({ where: { nik: { in: [...valid.keys()] } }, select: { nik: true } })).map((u) => u.nik));
+    const temp = new Map<string, { pw: string; hash: string }>();
+    for (const nik of valid.keys()) {
+      if (known.has(nik)) continue;
+      const pw = tempPassword();
+      temp.set(nik, { pw, hash: await argon2.hash(pw) });
+    }
     await this.prisma.$transaction(async (tx) => {
-      const seen = new Set<string>();
-      for (const raw of rows) {
-        const parsed = ImportRow.safeParse(coerceCells(raw));
-        if (!parsed.success || seen.has(parsed.data.nik)) continue; // preview already validated; skip bad/dup
-        const r = parsed.data;
-        seen.add(r.nik);
+      for (const r of valid.values()) {
         const existing = await tx.user.findUnique({ where: { nik: r.nik } });
         if (existing && existing.role === 'EMPLOYEE') {
           await tx.user.update({ where: { id: existing.id }, data: { name: r.name, department: r.department, phone: r.phone } });
           summary.updated++;
         } else if (!existing) {
-          const pw = tempPassword();
+          // ponytail: a nik created concurrently between pre-hash and tx hashes inline (rare race)
+          const t = temp.get(r.nik) ?? { pw: tempPassword(), hash: '' };
           const row = await tx.user.create({
             data: {
               nik: r.nik, name: r.name, department: r.department, phone: r.phone, role: 'EMPLOYEE',
-              passwordHash: await argon2.hash(pw), mustChangePassword: true, active: true,
+              passwordHash: t.hash || (await argon2.hash(t.pw)), mustChangePassword: true, active: true,
             },
           });
-          passwords.push({ userId: row.id, nik: row.nik, tempPassword: pw });
+          passwords.push({ userId: row.id, nik: row.nik, tempPassword: t.pw });
           summary.created++;
         }
       }

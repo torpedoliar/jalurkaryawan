@@ -40,11 +40,10 @@ describe('scheduler registration', () => {
     expect(jobs).toContain('backup');
   });
 
-  test('re-register on settings change: generate_run_time change updates cron expr', () => {
+  test('re-register on settings change: generate_run_time change updates cron expr', async () => {
     scheduler.registerAll();
-    // actorId null: fire-and-forget audit write must not FK-fail on a fake user id
-    settings.update({ generate_run_time: '01:15' }, { id: null, name: 'Admin' });
-    // onChanged fires synchronously → registerAll re-runs
+    await settings.update({ generate_run_time: '01:15' }, { id: null, name: 'Admin' });
+    // onChanged fired inside update → registerAll re-ran
     const expr = scheduler.cronExpression('generate');
     expect(expr).toContain('15 1');
   });
@@ -60,7 +59,7 @@ describe('scheduler registration', () => {
 
 // hygiene (fix round 1): test 3 leaves real cron timers RUNNING (*/5 reminder hits test DB mid-suite).
 // Restore the shared settings row first (update re-registers+starts jobs via 'changed'), then pause.
-afterAll(() => {
-  settings.update({ generate_run_time: '00:30' }, { id: null, name: 'Admin' });
+afterAll(async () => {
+  await settings.update({ generate_run_time: '00:30' }, { id: null, name: 'Admin' });
   scheduler.pauseAll();
 });

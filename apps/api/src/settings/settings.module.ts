@@ -15,6 +15,6 @@ import { BackupModule } from '../backup/backup.module';
     SettingsService, AuditService, PrismaClient,
     { provide: 'SETTINGS_KEY', useFactory: () => scryptSync(process.env.APP_SECRET ?? '', 'bms-settings', 32) },
   ],
-  exports: [SettingsService, AuditService],
+  exports: [SettingsService, AuditService, PrismaClient], // @Global: the ONE PrismaClient pool for every module
 })
 export class SettingsModule {}

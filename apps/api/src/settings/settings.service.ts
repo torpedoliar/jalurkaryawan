@@ -10,7 +10,7 @@ import { AuditService } from '../audit/audit.service';
 /**
  * In-memory settings cache. Secrets encrypted at rest with AES-256-GCM,
  * key = scryptSync(APP_SECRET, 'bms-settings', 32). update(): shared zod validation,
- * live cache swap, async durable write + masked audit, 'changed' event for cron re-register (Task 13).
+ * durable write, then live cache swap + 'changed' event (cron re-register), then masked audit.
  */
 @Injectable()
 export class SettingsService implements OnModuleInit {
@@ -49,13 +49,11 @@ export class SettingsService implements OnModuleInit {
     return toSettingsView(this.cache);
   }
 
-  update(partial: SettingsUpdate, actor: { id: string | null; name: string }): SettingsView {
+  async update(partial: SettingsUpdate, actor: { id: string | null; name: string }): Promise<SettingsView> {
     const candidate = { ...this.cache, ...partial } as Settings;
     const parsed = Settings.safeParse(candidate);
     if (!parsed.success) throw new DomainError('VALIDATION_ERROR', zodMessage(parsed.error.issues[0]));
     const before = { ...this.cache };
-    this.cache = parsed.data; // live-apply synchronously
-    this.onChanged.emit('changed', this.cache);
     const writes = Object.entries(partial)
       .filter(([, v]) => v !== undefined)
       .map(([k, v]) => {
@@ -66,13 +64,15 @@ export class SettingsService implements OnModuleInit {
           update: { value: stored as Prisma.InputJsonValue },
         });
       });
-    void this.prisma.$transaction(writes).then(() =>
-      this.audit.write({
-        actorId: actor.id, actorName: actor.name, action: 'SETTINGS_UPDATE',
-        entity: 'settings', entityId: '-',
-        before: toSettingsView(before), after: toSettingsView(this.cache),
-      }),
-    );
+    // durable first: cache only swaps (and cron re-registers) once the DB holds the new values
+    await this.prisma.$transaction(writes);
+    this.cache = parsed.data;
+    this.onChanged.emit('changed', this.cache);
+    await this.audit.write({
+      actorId: actor.id, actorName: actor.name, action: 'SETTINGS_UPDATE',
+      entity: 'settings', entityId: '-',
+      before: toSettingsView(before), after: toSettingsView(this.cache),
+    });
     return toSettingsView(this.cache);
   }
 

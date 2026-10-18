@@ -98,18 +98,36 @@ describe('reminder candidates', () => {
 
 describe('fcm service (unconfigured paths)', () => {
   test('send when push disabled returns {sent:0,failed:0}, no throw', async () => {
-    settings.update({ push_enabled: false }, { id: 'a', name: 'Admin' });
+    await settings.update({ push_enabled: false }, { id: 'a', name: 'Admin' });
     const fcm = new FcmService(settings, prisma);
     const r = await fcm.send([{ token: 'tok', platform: 'android' }], 't', 'b', {});
     expect(r).toEqual({ sent: 0, failed: 0 });
   });
 
   test('send when push enabled but no fcm secret returns {sent:0,failed:0}, logs warn', async () => {
-    settings.update({ push_enabled: true, fcm_service_account: '' }, { id: 'a', name: 'Admin' });
+    await settings.update({ push_enabled: true, fcm_service_account: '' }, { id: 'a', name: 'Admin' });
     const fcm = new FcmService(settings, prisma);
     const r = await fcm.send([{ token: 'tok', platform: 'android' }], 't', 'b', {});
     expect(r).toEqual({ sent: 0, failed: 0 });
-    settings.update({ push_enabled: false }, { id: 'a', name: 'Admin' });
+    await settings.update({ push_enabled: false }, { id: 'a', name: 'Admin' });
+  });
+});
+
+// I8 (spec §5.7): insert = store THEN push; a push failure never loses the row nor throws
+describe('insert pushes', () => {
+  test('insert stores the row and calls fcm.send for the user devices when push_enabled', async () => {
+    await prisma.deviceToken.create({ data: { userId, token: 'dev-1', platform: 'android' } });
+    const sent: string[] = [];
+    const fakeFcm = { send: async (d: { token: string }[]) => { sent.push(...d.map((x) => x.token)); throw new Error('boom'); } } as unknown as FcmService;
+    const svc = new NotificationsService(prisma, fakeFcm, settings);
+    await settings.update({ push_enabled: true }, { id: 'a', name: 'Admin' });
+    try {
+      await svc.insert(userId, 'TRIP_CANCELLED', 'Trip dibatalkan', 'x');
+    } finally {
+      await settings.update({ push_enabled: false }, { id: 'a', name: 'Admin' });
+    }
+    expect(sent).toEqual(['dev-1']);
+    expect(await prisma.notification.count({ where: { userId, type: 'TRIP_CANCELLED' } })).toBe(1);
   });
 });
 

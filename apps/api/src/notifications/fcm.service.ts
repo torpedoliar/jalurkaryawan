@@ -8,6 +8,7 @@ interface Device { token: string; platform: 'android' | 'ios' | 'web' }
 @Injectable()
 export class FcmService {
   private readonly logger = new Logger(FcmService.name);
+  private auth?: { raw: string; client: GoogleAuth };
 
   // prisma injected (brief note) — invalid-token delete must not spawn a fresh client per call
   constructor(private readonly settings: SettingsService, private readonly prisma: PrismaClient) {}
@@ -28,9 +29,11 @@ export class FcmService {
     }
     let accessToken: string;
     try {
-      const auth = new GoogleAuth({ credentials: JSON.parse(raw), scopes: ['https://www.googleapis.com/auth/firebase.messaging'] });
-      const client = await auth.getClient();
-      accessToken = (await client.getAccessToken()).token ?? '';
+      // one GoogleAuth per secret: it caches the OAuth token, so fan-out does not re-auth per send
+      if (this.auth?.raw !== raw) {
+        this.auth = { raw, client: new GoogleAuth({ credentials: JSON.parse(raw), scopes: ['https://www.googleapis.com/auth/firebase.messaging'] }) };
+      }
+      accessToken = (await this.auth.client.getAccessToken()) ?? '';
     } catch (e) {
       this.logger.warn(`fcm auth failed: ${(e as Error).message}`);
       return { sent: 0, failed: devices.length };
