@@ -9,10 +9,12 @@ import { AuthModule } from './auth/auth.module';
 import { FleetModule } from './fleet/fleet.module';
 import { RoutesModule } from './routes/routes.module';
 import { UsersModule } from './users/users.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { TripsModule } from './trips/trips.module';
 
 @Module({
   controllers: [HealthController],
-  imports: [SettingsModule, AuthModule, FleetModule, RoutesModule, UsersModule],
+  imports: [SettingsModule, AuthModule, NotificationsModule, FleetModule, RoutesModule, UsersModule, TripsModule],
   providers: [
     MaintenanceGuard,
     { provide: APP_GUARD, useExisting: MaintenanceGuard },
