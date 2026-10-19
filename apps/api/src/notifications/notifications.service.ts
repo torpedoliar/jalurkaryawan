@@ -69,10 +69,10 @@ export class NotificationsService {
     return bookings.length;
   }
 
-  /** Cleanup job: delete notifications older than retention days. */
+  /** Cleanup job: delete READ notifications older than retention days (spec: only "sudah dibaca"). */
   async cleanup(retentionDays: number): Promise<number> {
     const cutoff = new Date(Date.now() - retentionDays * 86_400_000);
-    const r = await this.prisma.notification.deleteMany({ where: { createdAt: { lt: cutoff } } });
+    const r = await this.prisma.notification.deleteMany({ where: { createdAt: { lt: cutoff }, readAt: { not: null } } });
     return r.count;
   }
 }

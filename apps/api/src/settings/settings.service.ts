@@ -71,7 +71,8 @@ export class SettingsService implements OnModuleInit {
     await this.audit.write({
       actorId: actor.id, actorName: actor.name, action: 'SETTINGS_UPDATE',
       entity: 'settings', entityId: '-',
-      before: toSettingsView(before), after: toSettingsView(this.cache),
+      // raw snapshots: AuditService.maskSnapshot writes secrets as literal '***' (mock system.ts parity; never isSet/view)
+      before, after: this.cache,
     });
     return toSettingsView(this.cache);
   }

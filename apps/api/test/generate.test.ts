@@ -52,4 +52,13 @@ describe('generateTrips (spec §5.2)', () => {
     expect(await prisma.trip.count({ where: { templateId: 'gtpl', date: tomorrow } })).toBe(1);
     expect(today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
+
+  // spec §5.2 "satu transaksi per tanggal": trips + subscription bookings run under one per-date tx
+  test('runGenerate wraps each date in one transaction, idempotent', async () => {
+    await generate.runGenerate();
+    const today = jakartaDate(new Date());
+    expect(await prisma.trip.count({ where: { templateId: 'gtpl', date: today } })).toBe(1);
+    const again = await generate.generateTrips(today); // direct call still works (no tx arg)
+    expect(again).toBe(0);
+  });
 });

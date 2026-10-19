@@ -132,14 +132,18 @@ describe('insert pushes', () => {
 });
 
 describe('cleanup', () => {
-  test('cleanup deletes notifications older than retention', async () => {
+  test('cleanup deletes only READ notifications older than retention; unread old survives', async () => {
+    const old = new Date(Date.now() - 100 * 86_400_000); // > default 90-day retention
     await prisma.notification.create({
-      data: { userId, type: 'REMINDER', title: 'old', body: 'old', readAt: null, createdAt: new Date(Date.now() - 100 * 86_400_000) },
+      data: { userId, type: 'REMINDER', title: 'old-unread', body: 'old', readAt: null, createdAt: old },
+    });
+    await prisma.notification.create({
+      data: { userId, type: 'REMINDER', title: 'old-read', body: 'old', readAt: old, createdAt: old },
     });
     await notifications.cleanup(90); // default retention 90 days
-    const old = await prisma.notification.findFirst({ where: { title: 'old' } });
-    expect(old).toBeNull();
-    const recent = await prisma.notification.findFirst({ where: { userId, type: 'REMINDER' } });
-    expect(recent).toBeTruthy();
+    expect(await prisma.notification.findFirst({ where: { title: 'old-read' } })).toBeNull(); // read + old → deleted
+    expect(await prisma.notification.findFirst({ where: { title: 'old-unread' } })).toBeTruthy(); // unread survives
+    const recent = await prisma.notification.findFirst({ where: { userId, title: 'Pengingat booking' } });
+    expect(recent).toBeTruthy(); // recent read/unread both survive
   });
 });

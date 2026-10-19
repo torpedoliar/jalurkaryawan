@@ -59,7 +59,7 @@ describe('settings service', () => {
     expect(svc.get().booking_cutoff_minutes).toBe(90);
     expect(fired).toBe(1);
     expect(view.booking_cutoff_minutes).toBe(90);
-    const log = await prisma.auditLog.findFirst({ where: { action: 'SETTINGS_UPDATE' }, orderBy: { createdAt: 'desc' } });
+    const log = await prisma.auditLog.findFirst({ where: { action: 'SETTINGS_UPDATE' }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
     expect(log).toBeTruthy();
   });
 
@@ -71,9 +71,19 @@ describe('settings service', () => {
     const view = svc.toView();
     expect(view.fcm_service_account.isSet).toBe(true);
     expect(JSON.stringify(view)).not.toContain('a@b.c'); // secret value never leaks
-    const log = await prisma.auditLog.findFirst({ where: { action: 'SETTINGS_UPDATE' }, orderBy: { createdAt: 'desc' } });
-    expect(JSON.stringify(log!.after)).toContain('***');
+    const log = await prisma.auditLog.findFirst({ where: { action: 'SETTINGS_UPDATE' }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
+    const after = log!.after as Record<string, unknown>;
+    expect(after.fcm_service_account).toBe('***'); // literal mask — not isSet, not ciphertext
+    expect(JSON.stringify(log!.after)).not.toContain('isSet');
     expect(JSON.stringify(log!.after)).not.toContain('a@b.c');
+    // second update: previous value was set → before masks as '***' too, new plaintext never stored
+    await svc.update({ fcm_service_account: '{"type":"service_account","project_id":"p2","private_key":"k2","client_email":"new@b.c"}' }, { id: 'a', name: 'Admin' });
+    const log2 = await prisma.auditLog.findFirst({ where: { action: 'SETTINGS_UPDATE' }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
+    const b2 = log2!.before as Record<string, unknown>;
+    const a2 = log2!.after as Record<string, unknown>;
+    expect(b2.fcm_service_account).toBe('***');
+    expect(a2.fcm_service_account).toBe('***');
+    expect(JSON.stringify(log2)).not.toContain('new@b.c');
   });
 
   test('SECRET_SETTING_KEYS matches shared export', () => {

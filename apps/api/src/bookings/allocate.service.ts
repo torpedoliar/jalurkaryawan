@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { ERROR_MESSAGES, isPastCutoff, jakartaDate } from '@bms/shared';
 import { DomainError } from '../common/domain-error';
 import { SettingsService } from '../settings/settings.service';
@@ -14,6 +14,8 @@ export interface AllocateParams {
   source: 'DAILY' | 'SUBSCRIPTION';
   subscriptionId?: string;
   fromCron?: boolean;
+  /** Run the claim inside this transaction (spec §5.2 one-tx-per-date) instead of opening its own. */
+  tx?: Prisma.TransactionClient;
 }
 
 /**
@@ -27,9 +29,7 @@ export class AllocateService {
 
   async allocateSeat(params: AllocateParams): Promise<{ bookingId: string }> {
     let fullError: DomainError | null = null;
-    try {
-      return await this.prisma.$transaction(
-        async (tx) => {
+    const run = async (tx: Prisma.TransactionClient): Promise<{ bookingId: string }> => {
           const user = await tx.user.findUnique({ where: { id: params.userId } });
           if (!user?.active) throw new DomainError('FORBIDDEN', ERROR_MESSAGES.FORBIDDEN);
 
@@ -87,10 +87,12 @@ export class AllocateService {
           // no trip had space → mark for outside-tx rejected insert, then throw
           fullError = new DomainError('TRIP_FULL', ERROR_MESSAGES.TRIP_FULL);
           throw fullError;
-        },
-        // ponytail: generous waits — 100 concurrent claimants serialize on the Trip row lock
-        { maxWait: 10_000, timeout: 30_000 },
-      );
+    };
+    try {
+      // caller-supplied tx = participate in its one-tx-per-date (§5.2); else open own tx (§5.1)
+      if (params.tx) return await run(params.tx);
+      // ponytail: generous waits — 100 concurrent claimants serialize on the Trip row lock
+      return await this.prisma.$transaction(run, { maxWait: 10_000, timeout: 30_000 });
     } catch (e) {
       if (e === fullError) {
         // commit the rejected row independently (spec §5.1: outside the tx)

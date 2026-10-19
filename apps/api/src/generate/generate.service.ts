@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { addDays, departureAt, isoWeekday, jakartaDate } from '@bms/shared';
 import { DomainError } from '../common/domain-error';
 import { SettingsService } from '../settings/settings.service';
@@ -20,8 +20,9 @@ export class GenerateService {
   ) {}
 
   /** Generate trips for one operational date. Returns count created. */
-  async generateTrips(date: string): Promise<number> {
-    const templates = await this.prisma.tripTemplate.findMany({
+  async generateTrips(date: string, tx?: Prisma.TransactionClient): Promise<number> {
+    const db = tx ?? this.prisma;
+    const templates = await db.tripTemplate.findMany({
       where: { active: true },
       include: { bus: true },
     });
@@ -41,7 +42,7 @@ export class GenerateService {
         busId: t.busId,
       }));
     if (!rows.length) return 0;
-    const r = await this.prisma.trip.createMany({ data: rows, skipDuplicates: true });
+    const r = await db.trip.createMany({ data: rows, skipDuplicates: true });
     return r.count;
   }
 
@@ -62,14 +63,22 @@ export class GenerateService {
     const today = jakartaDate(new Date());
     for (let i = 0; i <= daysAhead; i++) {
       const date = addDays(today, i);
-      await this.generateTrips(date);
-      await this.generateSubscriptionBookings(date);
+      // spec §5.2: satu transaksi per tanggal — trips + subscription bookings commit (or roll back) together
+      await this.prisma.$transaction(
+        async (tx) => {
+          await this.generateTrips(date, tx);
+          await this.generateSubscriptionBookings(date, tx);
+        },
+        // ponytail: matches allocateSeat's generous waits; date loop holds Trip row locks
+        { maxWait: 10_000, timeout: 30_000 },
+      );
     }
   }
 
   /** spec §5.2: generate SUBSCRIPTION-source bookings for one date. Idempotent via 4 skip rules. */
-  async generateSubscriptionBookings(date: string): Promise<void> {
-    const subs = await this.prisma.subscription.findMany({
+  async generateSubscriptionBookings(date: string, tx?: Prisma.TransactionClient): Promise<void> {
+    const db = tx ?? this.prisma;
+    const subs = await db.subscription.findMany({
       where: {
         status: 'ACTIVE',
         OR: [{ endDate: null }, { endDate: { gte: date } }],
@@ -81,21 +90,21 @@ export class GenerateService {
     for (const sub of subs) {
       if (!sub.weekdays.includes(weekday)) continue;
       // skip suspended-on-date (DAILY uses today, SUB uses date)
-      const user = await this.prisma.user.findUnique({ where: { id: sub.userId } });
+      const user = await db.user.findUnique({ where: { id: sub.userId } });
       if (!user?.active) continue;
       if (user.bookingSuspendedUntil && user.bookingSuspendedUntil >= new Date(`${date}T00:00:00+07:00`)) continue;
       // skip already booked
-      const hasBooked = await this.prisma.booking.findFirst({
+      const hasBooked = await db.booking.findFirst({
         where: { userId: sub.userId, date, shiftId: sub.shiftId, direction: sub.direction, status: 'BOOKED' },
       });
       if (hasBooked) continue;
       // skip cancelled on purpose (USER | ADMIN_TRIP) for this subscription
-      const cancelledOnPurpose = await this.prisma.booking.findFirst({
+      const cancelledOnPurpose = await db.booking.findFirst({
         where: { subscriptionId: sub.id, date, cancelReason: { in: ['USER', 'ADMIN_TRIP'] } },
       });
       if (cancelledOnPurpose) continue;
       // skip if a rejected row already exists for this subscription+date (prevents repeat notification)
-      const alreadyRejected = await this.prisma.rejectedRequest.findFirst({
+      const alreadyRejected = await db.rejectedRequest.findFirst({
         where: { subscriptionId: sub.id, date },
       });
       if (alreadyRejected) continue;
@@ -105,6 +114,8 @@ export class GenerateService {
           userId: sub.userId, routeId: sub.routeId, stopId: sub.stopId,
           shiftId: sub.shiftId, direction: sub.direction as 'PICKUP' | 'DROPOFF',
           date, source: 'SUBSCRIPTION', subscriptionId: sub.id, fromCron: true,
+          // inside runGenerate's one-tx-per-date, claim participates in that tx (§5.1 rejected row stays outside)
+          ...(tx ? { tx } : {}),
         });
       } catch (e) {
         if (!(e instanceof DomainError)) throw e; // mock parity (domain/generate.ts): only domain errors are non-fatal
