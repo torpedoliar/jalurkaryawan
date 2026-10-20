@@ -1,6 +1,6 @@
 # apps/api/Dockerfile
 FROM node:22-alpine
-RUN apk add --no-cache postgresql16-client smbclient
+RUN apk add --no-cache postgresql16-client samba-client
 ENV TZ=Asia/Jakarta
 WORKDIR /app
 RUN corepack enable
