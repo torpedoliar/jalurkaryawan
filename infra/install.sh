@@ -22,5 +22,6 @@ if [ ! -f certs/server.crt ]; then
 fi
 
 echo "next steps:"
+echo "  pnpm --filter @bms/web build  # from repo root, before compose up (nginx serves apps/web/dist)"
 echo "  docker compose up -d --build"
 echo "  docker compose exec api npx tsx prisma/seed.ts   # dev demo data, fresh DB only; WIPES ALL DATA, refuses if a Super Admin exists (add --force to re-seed)"
