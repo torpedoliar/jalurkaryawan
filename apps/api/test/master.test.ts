@@ -5,6 +5,7 @@ import { VendorsService } from '../src/fleet/vendors.service';
 import { BusesService } from '../src/fleet/buses.service';
 import { RoutesService } from '../src/routes/routes.service';
 import { StopsService } from '../src/routes/stops.service';
+import { ShiftsService } from '../src/routes/shifts.service';
 import { AuditService } from '../src/audit/audit.service';
 import { DomainError } from '../src/common/domain-error';
 
@@ -15,6 +16,7 @@ let vendors: VendorsService;
 let buses: BusesService;
 let routes: RoutesService;
 let stops: StopsService;
+let shifts: ShiftsService;
 
 beforeAll(async () => {
   await prisma.$transaction([
@@ -34,6 +36,7 @@ beforeAll(async () => {
   buses = new BusesService(prisma, audit);
   routes = new RoutesService(prisma, audit);
   stops = new StopsService(prisma, audit);
+  shifts = new ShiftsService(prisma, audit);
 });
 
 // auth.test deletes users wholesale; subscription FK (RESTRICT) must not outlive this file
@@ -129,6 +132,19 @@ describe('routes + stops', () => {
     const s = await prisma.stop.findFirstOrThrow({ where: { routeId: routeA.id } });
     await expect(stops.update(routeB.id, s.id, { name: 'X', seq: s.seq, offsetMinutes: 0, lat: null, lng: null, active: true }, actor))
       .rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+});
+
+// F2 / mock parity: PUT unknown id 404s, never upserts a row with the URL id
+describe('shifts', () => {
+  test('update unknown id → 404 NOT_FOUND and no row created; existing shift updates', async () => {
+    await expect(
+      shifts.update('missing-shift', { name: 'X', startTime: '01:00', endTime: '02:00' }, actor),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND', message: 'Data tidak ditemukan.' });
+    expect(await prisma.shift.findUnique({ where: { id: 'missing-shift' } })).toBeNull();
+    const created = await shifts.create({ name: 'Pagi', startTime: '07:00', endTime: '15:00' }, actor);
+    const updated = await shifts.update(created.id, { name: 'Siang', startTime: '13:00', endTime: '21:00' }, actor);
+    expect(updated).toMatchObject({ id: created.id, name: 'Siang', startTime: '13:00', endTime: '21:00' });
   });
 });
 

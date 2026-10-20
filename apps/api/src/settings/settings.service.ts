@@ -60,8 +60,8 @@ export class SettingsService implements OnModuleInit {
         const stored = (SECRET_SETTING_KEYS as readonly string[]).includes(k) ? this.encrypt(String(v ?? '')) : v;
         return this.prisma.setting.upsert({
           where: { key: k },
-          create: { key: k, value: stored as Prisma.InputJsonValue, isSecret: (SECRET_SETTING_KEYS as readonly string[]).includes(k) },
-          update: { value: stored as Prisma.InputJsonValue },
+          create: { key: k, value: stored as Prisma.InputJsonValue, isSecret: (SECRET_SETTING_KEYS as readonly string[]).includes(k), updatedBy: actor.id },
+          update: { value: stored as Prisma.InputJsonValue, updatedBy: actor.id },
         });
       });
     // durable first: cache only swaps (and cron re-registers) once the DB holds the new values

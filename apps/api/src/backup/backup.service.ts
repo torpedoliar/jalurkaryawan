@@ -185,6 +185,7 @@ export class BackupService {
       actorId: actor.id, actorName: actor.name, action: 'BACKUP_RESTORE',
       entity: 'backup', entityId: name, after: { preRestore },
     });
+    this.logger.log(`restore completed: ${name}`);
     return { preRestore: this.toFile(row) };
   }
 

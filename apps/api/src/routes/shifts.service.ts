@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { ShiftInput } from '@bms/shared';
+import { DomainError } from '../common/domain-error';
 import { AuditService } from '../audit/audit.service';
 
 type Actor = { id: string | null; name: string };
@@ -22,13 +23,11 @@ export class ShiftsService {
     return s;
   }
 
-  async upsert(id: string, input: ShiftInput, actor: Actor) {
-    const s = await this.prisma.shift.upsert({
-      where: { id },
-      create: { id, name: input.name, startTime: input.startTime, endTime: input.endTime },
-      update: { name: input.name, startTime: input.startTime, endTime: input.endTime },
-    });
-    await this.audit.write({ actorId: actor.id, actorName: actor.name, action: 'SHIFT_UPDATE', entity: 'shift', entityId: id, after: s });
+  async update(id: string, input: ShiftInput, actor: Actor) {
+    const before = await this.prisma.shift.findUnique({ where: { id } });
+    if (!before) throw new DomainError('NOT_FOUND', 'Data tidak ditemukan.');
+    const s = await this.prisma.shift.update({ where: { id }, data: { name: input.name, startTime: input.startTime, endTime: input.endTime } });
+    await this.audit.write({ actorId: actor.id, actorName: actor.name, action: 'SHIFT_UPDATE', entity: 'shift', entityId: id, before, after: s });
     return s;
   }
 }

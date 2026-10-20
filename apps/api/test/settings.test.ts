@@ -61,6 +61,10 @@ describe('settings service', () => {
     expect(view.booking_cutoff_minutes).toBe(90);
     const log = await prisma.auditLog.findFirst({ where: { action: 'SETTINGS_UPDATE' }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
     expect(log).toBeTruthy();
+    // F3 / spec §4.1: updatedBy persisted per key; internal only (SettingsView has no such field)
+    const row = await prisma.setting.findUnique({ where: { key: 'booking_cutoff_minutes' } });
+    expect(row!.updatedBy).toBe('a');
+    expect(JSON.stringify(view)).not.toContain('updatedBy');
   });
 
   test('secret stored ciphertext, read decrypted, view isSet only, audit masked', async () => {

@@ -139,10 +139,11 @@ export class AuthService {
   }
 
   async addDeviceToken(userId: string, token: string, platform: string): Promise<void> {
+    // token is globally unique (spec §4.4): re-registering a known device reassigns it to the new user
     await this.prisma.deviceToken.upsert({
-      where: { userId_token: { userId, token } },
+      where: { token },
       create: { userId, token, platform },
-      update: { platform },
+      update: { userId, platform },
     });
   }
 

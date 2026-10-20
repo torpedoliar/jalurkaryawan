@@ -222,12 +222,10 @@ model RefreshToken {
 model DeviceToken {
   id        String   @id @default(cuid())
   userId    String
-  token     String
+  token     String   @unique // spec §4.4: one device = one user globally; register reassigns
   platform  String   // android | ios | web
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   user      User     @relation(fields: [userId], references: [id])
-
-  @@unique([userId, token])
 }
 
 model Notification {
@@ -261,6 +259,7 @@ model Setting {
   key       String   @id
   value     Json
   isSecret  Boolean  @default(false)
+  updatedBy String? // spec §4.1 — internal only, never in SettingsView
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 }
 

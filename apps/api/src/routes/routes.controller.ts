@@ -81,7 +81,7 @@ export class RoutesController {
   @Put('shifts/:id')
   @Roles('SUPER_ADMIN', 'ADMIN_GA')
   @UsePipes(new ZodPipe(ShiftInput))
-  upsertShift(@Param('id') id: string, @Body() b: ShiftInput, @Req() r: ActorReq) {
-    return this.shifts.upsert(id, b, r.user);
+  updateShift(@Param('id') id: string, @Body() b: ShiftInput, @Req() r: ActorReq) {
+    return this.shifts.update(id, b, r.user);
   }
 }

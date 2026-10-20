@@ -151,4 +151,16 @@ describe('device tokens', () => {
     await auth.removeDeviceToken(u.id, 'tok-abc');
     expect(await prisma.deviceToken.findFirst({ where: { userId: u.id, token: 'tok-abc' } })).toBeNull();
   });
+
+  // F4 / spec §4.4: token unique GLOBALLY — same token from another user reassigns, never 500 / never double row
+  test('register same token from another user reassigns (global unique)', async () => {
+    const u1 = await makeUser('K9');
+    const u2 = await makeUser('K10');
+    await auth.addDeviceToken(u1.id, 'tok-r', 'android');
+    await auth.addDeviceToken(u2.id, 'tok-r', 'ios');
+    const rows = await prisma.deviceToken.findMany({ where: { token: 'tok-r' } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.userId).toBe(u2.id);
+    expect(rows[0]!.platform).toBe('ios');
+  });
 });
