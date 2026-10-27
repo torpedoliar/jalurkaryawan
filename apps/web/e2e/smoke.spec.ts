@@ -20,7 +20,8 @@ test("login, daily booking, then cancel", async ({ page }) => {
   // 2. Daily booking
   await page.getByRole("link", { name: "Booking Harian" }).click();
   await expect(page.getByRole("heading", { name: "Booking Harian" })).toBeVisible();
-  await page.getByLabel("Tanggal").selectOption(DATE);
+  // Use the combobox role: the quick-date chip group also carries a "tanggal" aria-label.
+  await page.getByRole("combobox", { name: /tanggal/i }).selectOption(DATE);
   // Shift's option label carries a time suffix (`Malam (23:00-07:00)`), and selectOption's label match is whole-string, so select by id.
   // Malam PICKUP departs 21:25, the latest cutoff of the day, so the "Batalkan" button below is present whenever this runs.
   await page.getByLabel("Shift").selectOption("malam");

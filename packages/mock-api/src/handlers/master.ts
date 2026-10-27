@@ -98,4 +98,15 @@ export const masterHandlers = [
     if (row.active && !input.active && used) reject("Titik jemput masih dipakai langganan aktif atau booking yang belum berangkat.");
     return update(db, u.id, row, "stop", input);
   })),
+  // Parity with the API: DELETE deactivates, it never drops the row.
+  http.delete(p(ENDPOINTS.stop(":routeId", ":stopId")), handle((ctx) => {
+    const u = admin(ctx);
+    const row = find(ctx.db.stops, ctx.params.stopId);
+    if (row.routeId !== ctx.params.routeId) throw new DomainError("NOT_FOUND");
+    const db = ctx.db;
+    const used = db.subscriptions.some((s) => s.stopId === row.id && s.status === "ACTIVE") ||
+      db.bookings.some((b) => b.stopId === row.id && b.status === "BOOKED" && notDeparted(db, find(db.trips, b.tripId).departureAt));
+    if (used) reject("Titik jemput masih dipakai langganan aktif atau booking yang belum berangkat.");
+    return update(db, u.id, row, "stop", { active: false });
+  })),
 ];

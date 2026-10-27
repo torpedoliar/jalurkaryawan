@@ -288,3 +288,32 @@ describe("self-service roles", () => {
     expect(after.body.find((b: Json) => b.id === created.body.id).status).toBe("CANCELLED");
   });
 });
+
+describe("stop deletion", () => {
+  const NEW_STOP = { name: "Halte Sementara", seq: 9, offsetMinutes: 60, lat: null, lng: null, active: true };
+
+  test("DELETE deactivates an unused stop and the row stays in the list", async () => {
+    const { token } = await login("ga");
+    const created = await api(ENDPOINTS.routeStops("r1"), { token, body: NEW_STOP });
+    expect(created.status).toBe(200);
+
+    const deleted = await api(ENDPOINTS.stop("r1", created.body.id), { token, method: "DELETE" });
+    expect(deleted.status).toBe(200);
+    expect(deleted.body).toMatchObject({ id: created.body.id, active: false });
+    expect(getDb().stops.find((s) => s.id === created.body.id)!.active).toBe(false);
+    expect((await api(ENDPOINTS.routeStops("r1"), { token })).body.some((s: Json) => s.id === created.body.id)).toBe(true);
+  });
+
+  test("a stop used by an active subscription or a future booking cannot be deleted", async () => {
+    const { token } = await login("ga");
+    const r = await api(ENDPOINTS.stop("r1", "r1s1"), { token, method: "DELETE" });
+    expect(r.status).toBe(400);
+    expect(r.body.message).toBe("Titik jemput masih dipakai langganan aktif atau booking yang belum berangkat.");
+    expect(getDb().stops.find((s) => s.id === "r1s1")!.active).toBe(true);
+  });
+
+  test("a wrong route id is NOT_FOUND", async () => {
+    const { token } = await login("ga");
+    expect((await api(ENDPOINTS.stop("r2", "r1s1"), { token, method: "DELETE" })).status).toBe(404);
+  });
+});

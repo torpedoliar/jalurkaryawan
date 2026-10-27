@@ -90,6 +90,8 @@ export const api = {
   get: <T extends ZodTypeAny>(path: string, schema: T, query?: Query) => request("GET", path, schema, { query }),
   post: <T extends ZodTypeAny>(path: string, schema: T, body?: unknown) => request("POST", path, schema, { body }),
   put: <T extends ZodTypeAny>(path: string, schema: T, body: unknown) => request("PUT", path, schema, { body }),
+  /** Deletes are soft: the API returns the row it deactivated. */
+  del: <T extends ZodTypeAny>(path: string, schema: T) => request("DELETE", path, schema),
   upload: <T extends ZodTypeAny>(path: string, schema: T, form: FormData) => request("POST", path, schema, { form }),
   /** Needs the bearer header, so a plain <a href> cannot do it. */
   async download(path: string, fileName: string): Promise<void> {

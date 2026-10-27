@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { z } from "zod";
 import { ENDPOINTS, Route, RouteInput, Stop, StopInput } from "@bms/shared";
 import { api } from "../../api";
-import { RouteMap } from "../../RouteMap";
+import { RouteMap, type LatLng } from "../../RouteMap";
 import { ErrorText, PageHeader, Panel, Stat, StatGrid, YesNo, upsert, useAction, useLoad } from "../../ui";
 
 const NEW_ROUTE = { id: "", code: "", name: "", color: "#1F6FD1", active: true };
@@ -17,9 +17,15 @@ export function RoutesStops() {
   const stops = useLoad(() => (routeId ? api.get(ENDPOINTS.routeStops(routeId), z.array(Stop)) : Promise.resolve([])), [routeId]);
   const [r, setR] = useState(NEW_ROUTE);
   const [s, setS] = useState(NEW_STOP);
+  const [showInactive, setShowInactive] = useState(false);
+  const [confirmStop, setConfirmStop] = useState(""); // stop id armed for deletion
+  const [redraw, setRedraw] = useState(0); // bumps when a drag save fails so the pin snaps back
   const { busy, error, run } = useAction();
   const selected = routes.data?.find((x) => x.id === routeId);
-  const unplaced = stops.data?.filter((x) => x.lat === null || x.lng === null).length ?? 0;
+  const all = stops.data ?? [];
+  const visible = all.filter((x) => showInactive || x.active);
+  const inactive = all.length - all.filter((x) => x.active).length;
+  const unplaced = visible.filter((x) => x.lat === null || x.lng === null).length;
 
   async function saveRoute(e: FormEvent) {
     e.preventDefault();
@@ -32,7 +38,25 @@ export function RoutesStops() {
     const body = () => StopInput.parse({ ...rest, seq: Number(rest.seq), offsetMinutes: Number(rest.offsetMinutes), lat: coord(rest.lat), lng: coord(rest.lng) });
     if (await run(() => upsert(id, ENDPOINTS.routeStops(routeId), (x) => ENDPOINTS.stop(routeId, x), Stop, body()))) { setS(NEW_STOP); stops.reload(); }
   }
-  const edit = (x: Stop) => setS({ ...x, seq: String(x.seq), offsetMinutes: String(x.offsetMinutes), lat: x.lat === null ? "" : String(x.lat), lng: x.lng === null ? "" : String(x.lng) });
+  const edit = (x: Stop) => { setS({ ...x, seq: String(x.seq), offsetMinutes: String(x.offsetMinutes), lat: x.lat === null ? "" : String(x.lat), lng: x.lng === null ? "" : String(x.lng) }); setConfirmStop(""); };
+  const stopBody = (x: Stop, p: { lat: number | null; lng: number | null }, active: boolean) => StopInput.parse({ name: x.name, seq: x.seq, offsetMinutes: x.offsetMinutes, lat: p.lat, lng: p.lng, active });
+
+  /** A dropped pin is a real edit: put the same stop back with its new coordinates. */
+  async function moveStop(x: Stop, p: LatLng) {
+    if (x.id === s.id) { setS((cur) => ({ ...cur, lat: String(p.lat), lng: String(p.lng) })); return; }
+    const saved = await run(() => api.put(ENDPOINTS.stop(routeId, x.id), Stop, stopBody(x, p, x.active)));
+    if (saved) stops.reload(); else setRedraw((n) => n + 1);
+  }
+  async function removeStop(x: Stop) {
+    setConfirmStop("");
+    if (await run(() => api.del(ENDPOINTS.stop(routeId, x.id), Stop))) {
+      if (s.id === x.id) setS(NEW_STOP);
+      stops.reload();
+    }
+  }
+  async function reactivate(x: Stop) {
+    if (await run(() => api.put(ENDPOINTS.stop(routeId, x.id), Stop, stopBody(x, x, true)))) stops.reload();
+  }
 
   return (
     <>
@@ -40,8 +64,8 @@ export function RoutesStops() {
       <ErrorText error={error ?? routes.error ?? stops.error} />
       <StatGrid>
         <Stat label="Rute" value={routes.data?.length ?? 0} hint={`${routes.data?.filter((r) => r.active).length ?? 0} aktif`} />
-        <Stat label="Titik rute terpilih" value={routeId ? (stops.data?.length ?? 0) : "—"} hint={routeId ? "titik jemput terdaftar" : "pilih rute di bawah"} tone="accent" />
-        <Stat label="Sudah dipetakan" value={routeId ? (stops.data?.filter((x) => x.lat !== null).length ?? 0) : "—"} hint="memiliki koordinat" tone="ok" />
+        <Stat label="Titik rute terpilih" value={routeId ? visible.length : "—"} hint={routeId ? (inactive ? `ditampilkan · ${inactive} nonaktif` : "titik jemput terdaftar") : "pilih rute di bawah"} tone="accent" />
+        <Stat label="Sudah dipetakan" value={routeId ? visible.filter((x) => x.lat !== null).length : "—"} hint="memiliki koordinat" tone="ok" />
         <Stat label="Belum dipetakan" value={routeId ? unplaced : "—"} hint="perlu klik peta atau koordinat" tone={unplaced ? "warn" : "ok"} />
       </StatGrid>
       <div className="grid-2">
@@ -78,28 +102,56 @@ export function RoutesStops() {
         <div className="stack">
           <h2 className="section-title">Titik jemput</h2>
           <Panel>
-            <label>Lihat titik rute
-              <select value={routeId} onChange={(e) => { setRouteId(e.target.value); setS(NEW_STOP); }}>
-                <option value="">Pilih</option>
-                {routes.data?.map((x) => <option key={x.id} value={x.id}>{x.code} {x.name}</option>)}
-              </select>
-            </label>
+            <div className="row">
+              <label>Lihat titik rute
+                <select value={routeId} onChange={(e) => { setRouteId(e.target.value); setS(NEW_STOP); setConfirmStop(""); }}>
+                  <option value="">Pilih</option>
+                  {routes.data?.map((x) => <option key={x.id} value={x.id}>{x.code} {x.name}</option>)}
+                </select>
+              </label>
+              {routeId && (
+                <label><input type="checkbox" checked={showInactive} onChange={(e) => { setShowInactive(e.target.checked); setConfirmStop(""); }} />Tampilkan nonaktif</label>
+              )}
+            </div>
             {!routeId && <p className="empty-note">Pilih rute untuk melihat dan mengelola titik jemputnya.</p>}
+            {routeId && visible.length === 0 && <p className="empty-note">Tidak ada titik jemput aktif pada rute ini. Tambah titik di bawah{inactive ? " atau tampilkan titik nonaktif" : ""}.</p>}
             {routeId && (
               <table>
                 <caption>Titik jemput</caption>
                 <thead><tr><th>Urutan</th><th>Nama</th><th>Menit dari berangkat</th><th>Lokasi</th><th>Aktif</th><th></th></tr></thead>
                 <tbody>
-                  {stops.data?.map((x) => (
+                  {visible.map((x) => (
                     <tr key={x.id}>
                       <td>{x.seq}</td><td>{x.name}</td><td>{x.offsetMinutes}</td>
                       <td>{x.lat === null ? <span className="pill warn">Belum dipetakan</span> : <span className="pill ok">Di peta</span>}</td>
                       <td><YesNo on={x.active} /></td>
-                      <td><div className="actions"><button onClick={() => edit(x)}>Ubah</button></div></td>
+                      <td>
+                        <div className="actions">
+                          {confirmStop === x.id ? (
+                            <>
+                              <button className="danger armed" disabled={busy} onClick={() => void removeStop(x)}>Ya, hapus</button>
+                              <button onClick={() => setConfirmStop("")}>Batal</button>
+                            </>
+                          ) : (
+                            <>
+                              <button onClick={() => edit(x)}>Ubah</button>
+                              {x.active
+                                ? <button className="danger" disabled={busy} onClick={() => setConfirmStop(x.id)}>Hapus</button>
+                                : <button disabled={busy} onClick={() => void reactivate(x)}>Aktifkan</button>}
+                            </>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+            )}
+            {routeId && (
+              <p className="muted">
+                Hapus menonaktifkan titik; riwayat booking dan langganan lama tetap tersimpan. Titik yang masih dipakai langganan aktif atau booking yang belum berangkat tidak bisa dihapus.
+                {inactive > 0 && !showInactive && ` ${inactive} titik nonaktif disembunyikan.`}
+              </p>
             )}
           </Panel>
         </div>
@@ -109,12 +161,17 @@ export function RoutesStops() {
         <>
           <h2 className="section-title">Peta {selected ? `${selected.code} ${selected.name}` : "rute"}</h2>
           {unplaced > 0 && <p className="muted">{unplaced} titik belum memiliki lokasi. Pilih Ubah pada titik itu, lalu klik peta.</p>}
+          {busy && <p className="muted">Menyimpan perubahan…</p>}
           <div className="map-layout">
             <RouteMap
-              stops={stops.data ?? []}
+              stops={all}
               color={selected?.color ?? "#1F6FD1"}
               draft={{ id: s.id, lat: coord(s.lat), lng: coord(s.lng) }}
+              showInactive={showInactive}
+              redraw={redraw}
               onPick={(p) => setS((cur) => ({ ...cur, lat: String(p.lat), lng: String(p.lng) }))}
+              onMove={(id, p) => { const x = all.find((y) => y.id === id); if (x) void moveStop(x, p); }}
+              onSelect={(id) => { const x = all.find((y) => y.id === id); if (x) edit(x); }}
             />
             <Panel className={s.id ? "editing" : "form"} title={s.id ? `Ubah titik: ${s.name}` : `Tambah titik ke ${selected?.code ?? "rute"}`}>
               <form className="stack" onSubmit={saveStop}>

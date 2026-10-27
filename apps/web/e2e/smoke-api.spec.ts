@@ -17,7 +17,8 @@ test('login → book daily → cancel against live API', async ({ page }) => {
   await page.getByRole('link', { name: /booking harian/i }).click();
   // tomorrow's date. Deviation from brief: Tanggal is a <select> (today..today+7), not a date input, so fill() cannot drive it.
   const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
-  await page.getByLabel(/tanggal/i).selectOption(tomorrow);
+  // Use the combobox role: the quick-date chip group also carries a "tanggal" aria-label.
+  await page.getByRole("combobox", { name: /tanggal/i }).selectOption(tomorrow);
   await page.getByLabel(/shift/i).selectOption('malam');
   await page.getByLabel(/arah/i).selectOption('PICKUP');
   await page.getByLabel(/rute/i).selectOption('r2');

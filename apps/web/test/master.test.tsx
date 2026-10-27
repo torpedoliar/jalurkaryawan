@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { fireEvent, screen, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { getDb } from "@bms/mock-api";
 import { renderApp } from "./render";
 
@@ -72,8 +72,32 @@ describe("admin master data", () => {
     expect(getDb().stops.find((s) => s.name === "Terminal Cikarang")).toMatchObject({ lat: -6.285, lng: 107.171 });
   });
 
-  test("duplicate route code shows server message", async () => {
+  test("a stop is deleted with confirmation, hidden by default and restorable", async () => {
     const { user } = await renderApp("/rute", "ga");
+    await user.selectOptions(await screen.findByLabelText("Lihat titik rute"), "r1");
+    const stops = await screen.findByRole("table", { name: "Titik jemput" });
+    await within(stops).findByText("Terminal Cikarang");
+
+    await user.type(screen.getByLabelText("Nama titik"), "Halte Sementara");
+    await user.type(screen.getByLabelText("Urutan"), "9");
+    await user.type(screen.getByLabelText("Menit dari berangkat"), "60");
+    await user.click(screen.getByRole("button", { name: "Simpan titik" }));
+    const row = (await within(stops).findByText("Halte Sementara")).closest("tr")!;
+
+    await user.click(within(row).getByRole("button", { name: "Hapus" }));
+    await user.click(within(row).getByRole("button", { name: "Ya, hapus" }));
+    await waitFor(() => expect(within(stops).queryByText("Halte Sementara")).toBeNull());
+    expect(getDb().stops.find((s) => s.name === "Halte Sementara")!.active).toBe(false);
+
+    await user.click(screen.getByLabelText("Tampilkan nonaktif"));
+    const grey = (await within(stops).findByText("Halte Sementara")).closest("tr")!;
+    expect(within(grey).getByText("Tidak")).toBeTruthy();
+    await user.click(within(grey).getByRole("button", { name: "Aktifkan" }));
+    await waitFor(() => expect(getDb().stops.find((s) => s.name === "Halte Sementara")!.active).toBe(true));
+    expect(within(await screen.findByRole("table", { name: "Titik jemput" })).getByText("Halte Sementara")).toBeTruthy();
+  });
+
+  test("duplicate route code shows server message", async () => {    const { user } = await renderApp("/rute", "ga");
     await user.type(await screen.findByLabelText("Kode"), "R1");
     await user.type(screen.getByLabelText("Nama rute"), "Lain");
     await user.click(screen.getByRole("button", { name: "Simpan rute" }));

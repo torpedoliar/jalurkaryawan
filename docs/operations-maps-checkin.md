@@ -21,8 +21,9 @@ QR menggunakan payload bertipe `BMS-T1:` untuk tiket dan `BMS-B1:` untuk bus. Is
 
 ## Pengelolaan admin
 
-- Rute & Titik: pilih rute, ubah titik, klik peta atau isi latitude/longitude. Dua koordinat harus terisi bersama atau sama-sama kosong.
-- Garis putus-putus hanya skema urutan titik, **bukan** jalur jalan yang dilalui bus. Waktu jemput masih menggunakan offset yang dikelola admin, bukan ETA dari GPS.
+- Rute & Titik: pilih rute, ubah titik, geser pin di peta (posisi tersimpan saat pin dilepas) atau klik peta/isi latitude/longitude. Klik pin untuk membuka titik itu di formulir. Dua koordinat harus terisi bersama atau sama-sama kosong.
+- Hapus pada daftar titik hanya menonaktifkan titik: riwayat booking dan langganan lama tetap tersimpan, dan titik bisa diaktifkan lagi lewat "Tampilkan nonaktif". Titik yang masih dipakai langganan aktif atau booking yang belum berangkat tidak bisa dihapus.
+- Garis putus-putus hanya skema urutan titik aktif, **bukan** jalur jalan yang dilalui bus. Waktu jemput masih menggunakan offset yang dikelola admin, bukan ETA dari GPS.
 - Admin & Vendor: role Sopir wajib terhubung ke vendor. Penugasan trip hanya mengizinkan sopir aktif dari vendor bus yang sesuai.
 - Trip Harian → Penumpang: penugasan sopir, jumlah check-in, jam dan metode kehadiran.
 - Vendor & Bus → QR: tampilkan/cetak QR check-in bus. Mengganti QR perlu konfirmasi karena label lama akan tidak berlaku.
