@@ -4,7 +4,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import argon2 from 'argon2';
-import { AuditLog, BackupFile, LoginResponse, SystemStatus, addDays, jakartaDate } from '@bms/shared';
+import { AuditLog, BackupFile, LoginResponse, SystemStatus, addDays, jakartaDate, toJakartaIso } from '@bms/shared';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -162,5 +162,43 @@ describe('wiring + wire shapes', () => {
     expect(await ok.json()).toEqual([]);
     const missing = await call('GET', '/api/users/nobody/bookings');
     expect(missing.status).toBe(404);
+  });
+});
+
+
+describe('operations HTTP authorization', () => {
+  test('driver operations reject admin tokens and tracking rejects strangers', async () => {
+    expect((await call('GET', '/api/driver/trips')).status).toBe(403);
+    expect((await fetch(`${base}/api/tracking`)).status).toBe(401);
+    const positions = await call('GET', '/api/tracking');
+    expect(positions.status).toBe(200);
+    expect(Array.isArray(await positions.json())).toBe(true);
+  });
+  test('invalid assignment input is rejected through the Zod error pipeline', async () => {
+    const res = await call('PUT', '/api/trips/nonexistent/driver', JSON.stringify({ driverId: 12 }));
+    expect(res.status).toBe(400);
+    expect((await res.json() as { code: string }).code).toBe('VALIDATION_ERROR');
+  });
+});
+
+
+describe('admin self-service', () => {
+  test('a Super Admin can book, list and cancel like an employee', async () => {
+    const shiftId = 'smoke-self-shift';
+    await prisma.shift.upsert({ where: { id: shiftId }, create: { id: shiftId, name: 'Smoke Self', startTime: '06:00', endTime: '14:00' }, update: {} });
+    const route = await prisma.route.create({ data: { code: 'SMOKE-SELF', name: 'Smoke Self Route', color: '#123456' } });
+    const stop = await prisma.stop.create({ data: { id: 'smoke-self-stop', routeId: route.id, name: 'Smoke Stop', seq: 1, offsetMinutes: 0 } });
+    const bus = await prisma.bus.create({ data: { plate: 'SMOKE SELF BUS', capacity: 40, vendorId: 'smoke-v' } });
+    const template = await prisma.tripTemplate.create({ data: { id: 'smoke-self-template', routeId: route.id, shiftId, busId: bus.id, direction: 'PICKUP', departureTime: '08:00', weekdays: [1,2,3,4,5,6,7] } });
+    const date = jakartaDate(new Date());
+    await prisma.trip.create({ data: { id: 'smoke-self-trip', templateId: template.id, routeId: route.id, shiftId, busId: bus.id, direction: 'PICKUP', date, departureAt: new Date(Date.now() + 4 * 60 * 60_000), capacity: 40 } });
+
+    const created = await call('POST', '/api/bookings', JSON.stringify({ routeId: route.id, stopId: stop.id, shiftId, direction: 'PICKUP', date }));
+    expect(created.status).toBe(200);
+    const booking = await created.json() as { id: string };
+    const mine = await call('GET', `/api/me/bookings?from=${date}&to=${date}`);
+    expect(((await mine.json()) as { id: string }[]).some((b) => b.id === booking.id)).toBe(true);
+    const cancelled = await call('POST', `/api/bookings/${booking.id}/cancel`);
+    expect((await cancelled.json() as { status: string }).status).toBe('CANCELLED');
   });
 });

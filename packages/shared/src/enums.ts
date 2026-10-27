@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const Role = z.enum(["SUPER_ADMIN", "ADMIN_GA", "EMPLOYEE", "VENDOR"]);
+export const Role = z.enum(["SUPER_ADMIN", "ADMIN_GA", "EMPLOYEE", "VENDOR", "DRIVER"]);
 export type Role = z.infer<typeof Role>;
 export const Direction = z.enum(["PICKUP", "DROPOFF"]);
 export type Direction = z.infer<typeof Direction>;
@@ -26,3 +26,5 @@ export const DepartureStatus = z.enum(["AVAILABLE", "ALMOST", "FULL", "CANCELLED
 export type DepartureStatus = z.infer<typeof DepartureStatus>;
 
 export const ADMIN_ROLES: readonly Role[] = ["SUPER_ADMIN", "ADMIN_GA"];
+/** Roles that can use employee self-service: own bookings, subscriptions, history, notifications, ticket QR and self check-in. */
+export const SELF_SERVICE_ROLES: readonly Role[] = ["EMPLOYEE", "SUPER_ADMIN", "ADMIN_GA"];

@@ -208,7 +208,7 @@ describe("admin & vendor accounts", () => {
     await user.type(screen.getByLabelText("Nama"), "Tanpa Vendor");
     await user.selectOptions(screen.getByLabelText("Role"), "VENDOR");
     await user.click(screen.getByRole("button", { name: "Simpan akun" }));
-    expect((await screen.findByRole("alert")).textContent).toBe("vendorId wajib hanya untuk role VENDOR");
+    expect((await screen.findByRole("alert")).textContent).toBe("vendorId wajib hanya untuk role VENDOR dan DRIVER");
     expect(getDb().users.some((u) => u.nik === "op3")).toBe(false);
   });
 
@@ -218,7 +218,7 @@ describe("admin & vendor accounts", () => {
     // Spec 6.1: vendor accounts are ADMIN_GA work; admin accounts are Super-Admin-only, so the
     // role select offers VENDOR alone and no admin row is listed.
     const options = within(await screen.findByLabelText("Role")).getAllByRole("option");
-    expect(options.map((o) => (o as HTMLOptionElement).value)).toEqual(["VENDOR"]);
+    expect(options.map((o) => (o as HTMLOptionElement).value)).toEqual(["VENDOR", "DRIVER"]);
     const table = (await screen.findByText("Akun admin & vendor")).closest("table")!;
     expect(within(table).getByRole("cell", { name: "Operator PT Trans Jaya" })).toBeTruthy();
     expect(within(table).queryByRole("cell", { name: "Super Admin" })).toBeNull();

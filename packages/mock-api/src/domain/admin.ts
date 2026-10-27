@@ -72,6 +72,8 @@ export function changeTripBus(db: Db, actorId: string, tripId: string, busId: st
   if (!bus.active) throw new DomainError("VALIDATION_ERROR", "Bus tidak aktif.");
   if (trip.status !== "SCHEDULED" || !notDeparted(db, trip.departureAt)) throw new DomainError("VALIDATION_ERROR", "Trip sudah dibatalkan atau sudah berangkat.");
   if (bus.capacity < trip.bookedCount) throw new DomainError("CAPACITY_BELOW_BOOKED", `Bus ${bus.plate} hanya ${bus.capacity} kursi, sudah ${trip.bookedCount} booking.`);
+  if (db.ops.attendance.some((a) => a.tripId === tripId) || db.ops.executions.some((e) => e.tripId === tripId && e.status === "IN_PROGRESS")) throw new DomainError("VALIDATION_ERROR", "Bus tidak bisa diganti setelah perjalanan atau check-in dimulai.");
+  db.ops.tripDrivers.delete(tripId);
   const before = { busId: trip.busId, capacity: trip.capacity };
   trip.busId = bus.id;
   trip.capacity = bus.capacity;
@@ -96,6 +98,7 @@ export function cancelTrip(db: Db, actorId: string, tripId: string): void {
   if (!trip) throw new DomainError("NOT_FOUND");
   if (trip.status === "CANCELLED") return;
   if (!notDeparted(db, trip.departureAt)) throw new DomainError("VALIDATION_ERROR", "Trip sudah berangkat.");
+  if (db.ops.attendance.some((a) => a.tripId === tripId) || db.ops.executions.some((e) => e.tripId === tripId && e.status === "IN_PROGRESS")) throw new DomainError("VALIDATION_ERROR", "Trip sudah berjalan atau memiliki penumpang check-in.");
   for (const b of passengersOf(db, tripId)) {
     cancelBooking(db, b, "ADMIN_TRIP", { checkCutoff: false });
     notify(db, b.userId, "TRIP_CANCELLED", "Trip dibatalkan", `Trip ${trip.date} jam ${trip.departureAt.slice(11, 16)} dibatalkan admin.`, { tripId });

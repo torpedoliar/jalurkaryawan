@@ -33,11 +33,12 @@ export type Route = z.infer<typeof Route>;
 export const StopInput = z.object({
   name: z.string().trim().min(1), seq: z.number().int().min(1),
   offsetMinutes: z.number().int().min(0).max(300),
-  lat: z.number().nullable().default(null), lng: z.number().nullable().default(null),
+  lat: z.number().min(-90, "Latitude di luar rentang.").max(90, "Latitude di luar rentang.").nullable().default(null),
+  lng: z.number().min(-180, "Longitude di luar rentang.").max(180, "Longitude di luar rentang.").nullable().default(null),
   active: z.boolean().default(true),
-});
+}).refine((s) => (s.lat === null) === (s.lng === null), { message: "Latitude dan longitude harus diisi bersama.", path: ["lng"] });
 export type StopInput = z.infer<typeof StopInput>;
-export const Stop = StopInput.extend({ id: Id, routeId: Id });
+export const Stop = StopInput.innerType().extend({ id: Id, routeId: Id });
 export type Stop = z.infer<typeof Stop>;
 
 export const UserSummary = z.object({
@@ -53,7 +54,7 @@ export const UserInput = z.object({
   nik: z.string().trim().min(1), name: z.string().trim().min(1),
   department: z.string().trim().default(""), phone: z.string().trim().default(""),
   role: Role, vendorId: Id.nullable().default(null),
-}).refine((u) => (u.role === "VENDOR") === (u.vendorId !== null), { message: "vendorId wajib hanya untuk role VENDOR", path: ["vendorId"] });
+}).refine((u) => (u.role === "VENDOR" || u.role === "DRIVER") === (u.vendorId !== null), { message: "vendorId wajib hanya untuk role VENDOR dan DRIVER", path: ["vendorId"] });
 export type UserInput = z.infer<typeof UserInput>;
 
 /** Shown once after create / reset / import. */

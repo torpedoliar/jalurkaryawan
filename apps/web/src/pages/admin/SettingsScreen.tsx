@@ -3,7 +3,7 @@ import { z } from "zod";
 import { BackupFile, ENDPOINTS, SECRET_SETTING_KEYS, SETTING_GROUPS, Settings, SettingsUpdate, SettingsView } from "@bms/shared";
 import { api } from "../../api";
 import { useAuth } from "../../auth";
-import { ErrorText, errorText, fileBytes, useAction, useLoad } from "../../ui";
+import { ErrorText, PageHeader, errorText, fileBytes, useAction, useLoad } from "../../ui";
 
 /** One row per setting. 19 keys spelled out, so the label copy lives in exactly one place. */
 const KEYS: Record<keyof Settings, { label: string; kind: string; placeholder?: string }> = {
@@ -38,6 +38,12 @@ type Pending = Partial<Record<SecretKey, string>>;
 const TAB_KEYS = ["booking", "notification", "security", "backup"] as const;
 type Tab = (typeof TAB_KEYS)[number];
 const TAB_LABEL: Record<Tab, string> = { booking: "Booking", notification: "Notifikasi", security: "Keamanan", backup: "Backup" };
+const TAB_HINT: Record<Tab, string> = {
+  booking: "Batas waktu booking dan pembuatan jadwal trip otomatis.",
+  notification: "Push notification ke aplikasi karyawan dan masa simpan notifikasi.",
+  security: "Aturan login, masa berlaku token, dan panjang password.",
+  backup: "Jadwal backup otomatis dan salinan ke network share.",
+};
 /** The mock answers 200 with {ok, message}: a failed test push is not a failed API call. */
 const TestResult = z.object({ ok: z.boolean(), message: z.string() });
 /** carry defect 3: the schema argument to api.post parses the RESPONSE, which is the pre-restore file. */
@@ -133,7 +139,7 @@ export function SettingsScreen() {
 
   return (
     <>
-      <h1>Pengaturan</h1>
+      <PageHeader title="Pengaturan" eyebrow="Sistem" description="Konfigurasi sistem. Perubahan berlaku setelah disimpan." />
       {/* One alert surface for the whole screen: ErrorText is role="alert", so a second copy anywhere
           (two are what made findByRole("alert") ambiguous before) both repeats the message to the user
           and hides whichever source the second block does not read. load, save, the backup list and
@@ -141,25 +147,35 @@ export function SettingsScreen() {
       <ErrorText error={load.error ?? save.error ?? list.error ?? act.error} />
       {msg && <p role="status">{msg}</p>}
       {load.data && (
-        <form onSubmit={submit}>
-          <nav>{TAB_KEYS.map((k) => <button key={k} type="button" onClick={() => setTab(k)}>{TAB_LABEL[k]}</button>)}</nav>
+        <form className="settings-layout" onSubmit={submit}>
+          <aside className="settings-nav">
+            <span className="eyebrow">Kategori</span>
+            <div className="tabs" role="group" aria-label="Kategori pengaturan">
+              {TAB_KEYS.map((k) => <button key={k} type="button" aria-pressed={tab === k} onClick={() => setTab(k)}>{TAB_LABEL[k]}</button>)}
+            </div>
+            <p>{TAB_HINT[tab]}</p>
+          </aside>
 
-          <section className="card">
-            {SETTING_GROUPS[tab].filter((k) => k !== "backup_share_password").map((k) => (
-              <Row key={k} k={k as Key} value={value} set={set} pickFcm={pickFcm} />
-            ))}
+          <section className="panel">
+            <div className="panel-head"><div><h2>{TAB_LABEL[tab]}</h2><p className="muted">{TAB_HINT[tab]}</p></div></div>
+            <div className="fields">
+              {SETTING_GROUPS[tab].filter((k) => k !== "backup_share_password").map((k) => (
+                <Row key={k} k={k as Key} value={value} set={set} pickFcm={pickFcm} />
+              ))}
+            </div>
             {tab === "backup" && (
               <>
                 {/* Label + input for typing, status line for what is stored. The value itself is never rendered. */}
-                <p>
-                  <label htmlFor="s-backup_share_password">Password share</label>
-                  <input
-                    id="s-backup_share_password"
-                    type="password"
-                    value={pending.backup_share_password ?? ""}
-                    onChange={(e) => setPending((s) => ({ ...s, backup_share_password: e.target.value }))}
-                  />
-                </p>
+                <div className="fields">
+                  <label htmlFor="s-backup_share_password">Password share
+                    <input
+                      id="s-backup_share_password"
+                      type="password"
+                      value={pending.backup_share_password ?? ""}
+                      onChange={(e) => setPending((s) => ({ ...s, backup_share_password: e.target.value }))}
+                    />
+                  </label>
+                </div>
                 <p>Status: {load.data.backup_share_password.isSet ? "Tersimpan" : "Belum diisi"}</p>
                 <div className="row">
                   <button type="button" onClick={() => setPending((s) => ({ ...s, backup_share_password: "" }))}>Hapus password share</button>
@@ -176,16 +192,17 @@ export function SettingsScreen() {
                 </div>
               </>
             )}
+            <div className="row">
+              <button className="primary" disabled={save.busy}>Simpan pengaturan</button>
+            </div>
           </section>
-
-          <button className="primary" disabled={save.busy}>Simpan pengaturan</button>
         </form>
       )}
 
       {tab === "backup" && (
         <>
-          <section className="card">
-            <h2>Backup database</h2>
+          <section className="panel">
+            <div className="panel-head"><div><h2>Backup database</h2><p className="muted">Buat backup manual, unggah file backup dari luar, atau unduh backup yang ada.</p></div></div>
             <div className="row">
               <button type="button" disabled={act.busy} onClick={async () => { if (await act.run(() => api.post(ENDPOINTS.backupRun, BackupFile))) { setMsg("Backup dibuat."); list.reload(); } }}>Backup sekarang</button>
               <label htmlFor="up">File backup<input id="up" type="file" accept=".dump" onChange={(e) => void upload(e.target.files?.[0])} /></label>
@@ -209,32 +226,36 @@ export function SettingsScreen() {
           </section>
 
           {(list.data?.length ?? 0) > 0 ? (
-            <section className="card">
+            <section className="panel danger-zone">
               <h2>Pulihkan dari backup</h2>
-              <p>Seluruh sesi login akan diakhiri setelah pemulihan selesai, dan kamu diminta masuk lagi.</p>
+              <p className="muted">Seluruh data saat ini diganti isi file backup. Seluruh sesi login akan diakhiri setelah pemulihan selesai, dan kamu diminta masuk lagi.</p>
               {/* Spec 5.11: pick from the backup list, never free text - the list is the only source of a name the API can restore. */}
-              <label htmlFor="rf">File backup tujuan
-                <select id="rf" value={file} onChange={(e) => setFile(e.target.value)}>
-                  <option value="">Pilih file backup…</option>
-                  {list.data?.map((b) => <option key={b.name} value={b.name}>{b.name}</option>)}
-                </select>
-              </label>
-              <label htmlFor="rp">Password kamu<input id="rp" type="password" value={pw} onChange={(e) => setPw(e.target.value)} /></label>
-              <label htmlFor="rc">Ketik RESTORE<input id="rc" value={confirm} onChange={(e) => setConfirm(e.target.value)} /></label>
-              <button
-                className="primary"
-                disabled={act.busy || !file || confirm !== "RESTORE"}
-                onClick={async () => {
-                  // confirm is the literal the schema requires; the button stays disabled until the field matches.
-                  const out = await act.run(() => api.post(ENDPOINTS.restore, RestoreResponse, { fileName: file, password: pw, confirm: "RESTORE" }));
-                  if (out) await signOut();
-                }}
-              >
-                Pulihkan database
-              </button>
+              <div className="fields">
+                <label htmlFor="rf">File backup tujuan
+                  <select id="rf" value={file} onChange={(e) => setFile(e.target.value)}>
+                    <option value="">Pilih file backup…</option>
+                    {list.data?.map((b) => <option key={b.name} value={b.name}>{b.name}</option>)}
+                  </select>
+                </label>
+                <label htmlFor="rp">Password kamu<input id="rp" type="password" value={pw} onChange={(e) => setPw(e.target.value)} /></label>
+                <label htmlFor="rc">Ketik RESTORE<input id="rc" value={confirm} onChange={(e) => setConfirm(e.target.value)} /></label>
+              </div>
+              <div className="row">
+                <button
+                  className="danger armed"
+                  disabled={act.busy || !file || confirm !== "RESTORE"}
+                  onClick={async () => {
+                    // confirm is the literal the schema requires; the button stays disabled until the field matches.
+                    const out = await act.run(() => api.post(ENDPOINTS.restore, RestoreResponse, { fileName: file, password: pw, confirm: "RESTORE" }));
+                    if (out) await signOut();
+                  }}
+                >
+                  Pulihkan database
+                </button>
+              </div>
             </section>
           ) : (
-            <p>Belum ada file backup untuk dipulihkan.</p>
+            <p className="empty-note">Belum ada file backup untuk dipulihkan.</p>
           )}
         </>
       )}

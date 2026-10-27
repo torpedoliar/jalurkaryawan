@@ -43,6 +43,26 @@ describe("employee", () => {
     expect(await within(card).findByText("Dibatalkan")).toBeTruthy();
   });
 
+  test("admin can book, cancel and see the booking in history", async () => {
+    const { user } = await renderApp("/booking", "admin");
+    await user.selectOptions(await screen.findByLabelText("Tanggal"), TOMORROW);
+    await user.selectOptions(screen.getByLabelText("Shift"), "siang");
+    await user.selectOptions(screen.getByLabelText("Arah"), "PICKUP");
+    await user.selectOptions(screen.getByLabelText("Rute"), "r2");
+    await user.selectOptions(await screen.findByLabelText("Titik jemput"), "r2s1");
+    await user.click(screen.getByRole("button", { name: "Pesan" }));
+    expect(await screen.findByText(/Booking berhasil/)).toBeTruthy();
+
+    await user.click(screen.getByRole("link", { name: "Beranda" }));
+    const card = (await screen.findAllByRole("article")).find((a) => within(a).queryByText(/R2 Bekasi Timur/))!;
+    await user.click(within(card).getByRole("button", { name: "Batalkan" }));
+    expect(await within(card).findByText("Dibatalkan")).toBeTruthy();
+
+    await user.click(screen.getByRole("link", { name: "Riwayat" }));
+    const row = (await screen.findAllByRole("row")).find((r) => within(r).queryByText(/R2/))!;
+    expect(within(row).getByText("Dibatalkan")).toBeTruthy();
+  });
+
   test("booking error from server is shown verbatim (already booked pagi pickup)", async () => {
     const { user } = await renderApp("/booking", "K1001");
     await user.selectOptions(await screen.findByLabelText("Tanggal"), TOMORROW);

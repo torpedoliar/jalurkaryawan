@@ -19,6 +19,8 @@ model Vendor {
 }
 
 model Bus {
+  qrCredential BusQrCredential?
+  attendances Attendance[]
   id        String   @id @default(cuid())
   plate     String   @unique
   capacity  Int
@@ -78,6 +80,8 @@ model Stop {
 }
 
 model User {
+  operations TripOperation[]
+  attendances Attendance[]
   id                    String    @id @default(cuid())
   nik                   String    @unique
   name                  String
@@ -123,6 +127,9 @@ model TripTemplate {
 }
 
 model Trip {
+  operation TripOperation?
+  attendances Attendance[]
+  locations TripLocation[]
   id          String        @id @default(cuid())
   templateId  String
   date        String        // YYYY-MM-DD operational date (Asia/Jakarta)
@@ -148,6 +155,8 @@ model Trip {
 }
 
 model Booking {
+  ticketCredential TicketCredential?
+  attendance Attendance?
   id             String        @id @default(cuid())
   userId         String
   tripId         String?
@@ -269,4 +278,51 @@ model Backup {
   sizeBytes     Int
   copiedToShare Boolean  @default(false)
   createdAt     DateTime @default(now()) @db.Timestamptz(3)
+}
+
+model BusQrCredential {
+  busId String @id
+  secretHash String @unique
+  ciphertext String
+  rotatedAt DateTime @default(now()) @db.Timestamptz(3)
+  bus Bus @relation(fields: [busId], references: [id], onDelete: Cascade)
+}
+model TicketCredential {
+  bookingId String @id
+  secretHash String @unique
+  ciphertext String
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+}
+model TripOperation {
+  tripId String @id
+  driverId String?
+  status String @default("NOT_STARTED")
+  startedAt DateTime? @db.Timestamptz(3)
+  endedAt DateTime? @db.Timestamptz(3)
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  driver User? @relation(fields: [driverId], references: [id])
+}
+model Attendance {
+  bookingId String @id
+  tripId String
+  busId String
+  actorId String
+  checkedInAt DateTime @default(now()) @db.Timestamptz(3)
+  method String
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  bus Bus @relation(fields: [busId], references: [id])
+  actor User @relation(fields: [actorId], references: [id])
+  @@index([tripId])
+}
+model TripLocation {
+  tripId String
+  sampleId String
+  lat Float
+  lng Float
+  accuracy Float?
+  capturedAt DateTime @db.Timestamptz(3)
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  @@id([tripId, sampleId])
+  @@index([tripId, capturedAt(sort: Desc)], map: "TripLocation_latest_idx")
 }

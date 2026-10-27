@@ -102,14 +102,18 @@ export class TemplatesService {
         include: { bookings: { where: { status: 'BOOKED' } } },
       });
       const notifyList: { userId: string; date: string; time: string }[] = [];
-      for (const trip of trips) {
-        const booked = trip.bookedCount;
+      for (const trip of trips.sort((a, b) => a.id.localeCompare(b.id))) {
+        await tx.$queryRaw`SELECT "id" FROM "Trip" WHERE "id"=${trip.id} FOR UPDATE`;
+        if (await tx.attendance.count({ where: { tripId: trip.id } }) || await tx.tripOperation.count({ where: { tripId: trip.id, status: 'IN_PROGRESS' } })) throw new DomainError('VALIDATION_ERROR', 'Jadwal tidak bisa diubah setelah perjalanan atau check-in dimulai.');
+        const current = await tx.trip.findUniqueOrThrow({ where: { id: trip.id } });
+        const booked = current.bookedCount;
         if (bus.capacity < booked) {
           throw new DomainError(
             'CAPACITY_BELOW_BOOKED',
             `Trip ${trip.date} jam ${toJakartaIso(trip.departureAt.getTime()).slice(11, 16)} sudah ${booked} booking; bus ${bus.plate} hanya ${bus.capacity} kursi.`,
           );
         }
+        if (trip.busId !== input.busId) await tx.tripOperation.deleteMany({ where: { tripId: trip.id } });
         const newDep = departureAt(trip.date, input.departureTime, input.dayOffset);
         await tx.trip.update({
           where: { id: trip.id },

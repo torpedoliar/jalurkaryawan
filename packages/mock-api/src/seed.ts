@@ -13,6 +13,16 @@ const ROUTES = [
   ["R6", "Jababeka", "#0E9AA7", ["Terminal Jababeka", "Kawasan Jababeka 2", "Pasir Gombong"], 50],
 ] as const;
 
+/** Approximate demo stop coordinates per route (index 0 unused: R1 starts unmapped). */
+const COORDS: [number, number][][] = [
+  [],
+  [[-6.2486, 107.0177], [-6.2491, 107.0060], [-6.2735, 106.9990]],
+  [[-6.3197, 107.2915], [-6.3062, 107.3054], [-6.3220, 107.3185]],
+  [[-6.2357, 107.0560], [-6.2410, 107.0635], [-6.2520, 107.0790]],
+  [[-6.2610, 107.0890], [-6.2655, 107.0975], [-6.2790, 107.1060]],
+  [[-6.2950, 107.1490], [-6.3105, 107.1630], [-6.3260, 107.1735]],
+];
+
 /** [shiftId, direction, hour, minute, dayOffset]; minute + 5 per route index. */
 const TEMPLATES: [string, Direction, number, number, 0 | 1][] = [
   ["pagi", "PICKUP", 5, 20, 0], ["pagi", "DROPOFF", 15, 10, 0],
@@ -46,7 +56,11 @@ export function createSeededDb(now: () => Date = () => new Date()): Db {
   ROUTES.forEach(([code, name, color, stops, capacity], i) => {
     const routeId = `r${i + 1}`;
     db.routes.push({ id: routeId, code, name, color, active: true });
-    stops.forEach((stop, s) => db.stops.push({ id: `${routeId}s${s + 1}`, routeId, name: stop, seq: s + 1, offsetMinutes: s * 15, lat: null, lng: null, active: true }));
+    // R1 is left unmapped so the "Belum dipetakan" state is visible; the others get demo coordinates.
+    stops.forEach((stop, s) => {
+      const [lat, lng] = i === 0 ? [null, null] : COORDS[i]![s]!;
+      db.stops.push({ id: `${routeId}s${s + 1}`, routeId, name: stop, seq: s + 1, offsetMinutes: s * 15, lat, lng, active: true });
+    });
     const vendorId = i < 3 ? "v1" : "v2";
     const [busA, busB] = [`b${i * 2 + 1}`, `b${i * 2 + 2}`];
     db.buses.push(
@@ -65,6 +79,8 @@ export function createSeededDb(now: () => Date = () => new Date()): Db {
     account("admin", "admin", "Super Admin", "SUPER_ADMIN"),
     account("ga", "ga", "Admin GA", "ADMIN_GA"),
     account("vendor", "vendor", "Operator PT Trans Jaya", "VENDOR", { vendorId: "v1" }),
+    account("driver", "driver", "Sopir Joko", "DRIVER", { vendorId: "v1", phone: "081300000001" }),
+    account("driver2", "driver2", "Sopir Hadi", "DRIVER", { vendorId: "v2", phone: "081300000002" }),
   );
   for (let i = 0; i < 90; i++) {
     const nik = `K${1001 + i}`;
@@ -87,5 +103,10 @@ export function createSeededDb(now: () => Date = () => new Date()): Db {
   db.users.find((u) => u.nik === "K1090")!.mustChangePassword = true;
 
   runGenerate(db);
+  // Driver Joko runs every trip of buses b1/b2 (R1, vendor v1); driver2 runs R4 (vendor v2).
+  for (const t of db.trips) {
+    if (t.busId === "b1" || t.busId === "b2") db.ops.tripDrivers.set(t.id, "driver");
+    if (t.busId === "b7" || t.busId === "b8") db.ops.tripDrivers.set(t.id, "driver2");
+  }
   return db;
 }

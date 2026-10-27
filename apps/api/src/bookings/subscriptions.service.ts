@@ -114,6 +114,10 @@ export class SubscriptionsService {
   /** Conditional BOOKED flip + decrement (T8 pattern): only the flip winner frees the seat. */
   private async cancelBooking(bookingId: string, tripId: string | null, reason: 'SUBSCRIPTION_ENDED' | 'SUSPENDED' | 'USER_DEACTIVATED'): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
+      if (tripId) await tx.$queryRaw`SELECT "id" FROM "Trip" WHERE "id"=${tripId} FOR UPDATE`;
+      await tx.$queryRaw`SELECT "id" FROM "Booking" WHERE "id"=${bookingId} FOR UPDATE`;
+      const attended = await tx.$queryRaw<{ bookingId: string }[]>`SELECT "bookingId" FROM "Attendance" WHERE "bookingId"=${bookingId}`;
+      if (attended.length) return;
       const flipped = await tx.booking.updateMany({
         where: { id: bookingId, status: 'BOOKED' },
         data: { status: 'CANCELLED', cancelReason: reason, cancelledAt: new Date() },

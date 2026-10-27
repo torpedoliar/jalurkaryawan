@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Post, Query, Req, UsePipes } from '@nestjs/common';
-import { DailyBookingRequest, SubscriptionInput } from '@bms/shared';
+import { DailyBookingRequest, SELF_SERVICE_ROLES, SubscriptionInput } from '@bms/shared';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { ZodPipe } from '../common/zod-body.pipe';
 import { BookingsService } from './bookings.service';
@@ -9,7 +9,7 @@ type EmpReq = { user: { id: string } };
 
 /** Paths mirror ENDPOINTS: /me/bookings, /bookings, /bookings/:id/cancel, /me/subscriptions, /subscriptions. */
 @Controller()
-@Roles('EMPLOYEE') // employee-only endpoints (mock bookingHandlers gate EMPLOYEE)
+@Roles(...SELF_SERVICE_ROLES) // employees and admins share self-service booking
 export class BookingsController {
   constructor(
     private readonly bookings: BookingsService,

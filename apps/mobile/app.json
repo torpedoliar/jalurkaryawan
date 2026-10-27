@@ -13,7 +13,9 @@
       }
     },
     "plugins": [
-      "expo-font"
+      "expo-font",
+      ["expo-camera", { "cameraPermission": "Izinkan kamera untuk memindai QR bus dan tiket.", "recordAudioAndroid": false }],
+      ["expo-location", { "locationAlwaysAndWhenInUsePermission": "Bagikan lokasi hanya selama perjalanan pengemudi aktif.", "isIosBackgroundLocationEnabled": true, "isAndroidBackgroundLocationEnabled": true, "isAndroidForegroundServiceEnabled": true }]
     ]
   }
 }

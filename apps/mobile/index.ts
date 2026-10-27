@@ -1,4 +1,5 @@
 import { createElement } from "react";
+import "./src/operations";
 import { registerRootComponent } from "expo";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
@@ -26,4 +27,6 @@ function Root() {
   return createElement(SafeAreaProvider, null, createElement(SafeAreaView, { style: { flex: 1, backgroundColor: C.bg } }, createElement(StatusBar, { style: "dark" }), createElement(App)));
 }
 
-registerRootComponent(Root);
+// Expo's SDK type tree may resolve a separate React declaration copy from pnpm.
+// Runtime is the same React root; keep the compatibility cast at this external boundary.
+registerRootComponent(Root as unknown as Parameters<typeof registerRootComponent>[0]);

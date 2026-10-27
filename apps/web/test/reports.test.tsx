@@ -92,7 +92,7 @@ describe("reports", () => {
     expect(within(screen.getByRole("row", { name: /2026-10-14 R2 Bekasi Timur Pagi Jemput/ })).getByRole("cell", { name: "10/50 (20%)" })).toBeTruthy();
 
     const occ = (await screen.findByText("Keterisian")).closest("table")!;
-    await user.click(occ.parentElement!.querySelector("button")!);
+    await user.click(occ.closest("section")!.querySelector("button")!);
     expect(saved).toEqual([`keterisian-${FIRST}-${LAST}.xlsx`]);
 
     // Read the workbook back: the file name alone would not catch a mangled header or a blank row.
@@ -113,7 +113,7 @@ describe("reports", () => {
     const rejected = (await screen.findByText("Permintaan ditolak")).closest("table")!;
     expect(within(rejected).getAllByRole("row")).toHaveLength(29); // header + 28 rows over 7 days
     expect(within(rejected).getByRole("row", { name: /2026-10-14 k1049 R1 Pagi Jemput Langganan/ })).toBeTruthy();
-    await user.click(rejected.parentElement!.querySelector("button")!);
+    await user.click(rejected.closest("section")!.querySelector("button")!);
     expect(saved).toEqual([`ditolak-${FIRST}-${LAST}.xlsx`]);
   });
 
@@ -125,7 +125,7 @@ describe("reports", () => {
     expect(await screen.findByText("16 booking")).toBeTruthy();
     const history = (await screen.findByText("Riwayat booking")).closest("table")!;
     expect(within(history).getAllByRole("row")).toHaveLength(17);
-    await user.click(history.parentElement!.querySelector("button")!);
+    await user.click(history.closest("section")!.querySelector("button")!);
     expect(saved).toEqual(["riwayat-k1001.xlsx"]);
   });
 

@@ -4,7 +4,7 @@ import { ENDPOINTS, SetupStatus, type Me } from "@bms/shared";
 import { api, apiEvents, loadSession, logout } from "./api";
 import { AuthContext } from "./auth";
 import { Layout } from "./layout/Layout";
-import { PAGES } from "./pages";
+import { LANDING, PAGES } from "./pages";
 import { ChangePassword } from "./pages/ChangePassword";
 import { Login } from "./pages/Login";
 import { Maintenance } from "./pages/Maintenance";
@@ -43,6 +43,7 @@ export function App() {
   if (boot === "setup") return <AuthContext.Provider value={{ me, setMe, signOut }}><Setup onDone={(m) => { setMe(m); setBoot("ready"); }} /></AuthContext.Provider>;
 
   const pages = me ? PAGES.filter((p) => p.roles.includes(me.role)) : [];
+  const home = (me && pages.find((p) => p.path === LANDING[me.role])) ?? pages[0];
   return (
     <AuthContext.Provider value={{ me, setMe, signOut }}>
       {!me ? <Login />
@@ -51,7 +52,7 @@ export function App() {
           <Routes>
             <Route element={<Layout pages={pages} />}>
               {pages.map((p) => <Route key={p.path} path={p.path} element={p.element} />)}
-              <Route path="*" element={<Navigate to={pages[0]!.path} replace />} />
+              <Route path="*" element={<Navigate to={home!.path} replace />} />
             </Route>
           </Routes>
         )}

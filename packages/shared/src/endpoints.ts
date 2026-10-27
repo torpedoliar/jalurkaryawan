@@ -59,4 +59,20 @@ export const ENDPOINTS = {
   backupUpload: "/api/backups/upload",
   restore: "/api/backups/restore",
   systemStatus: "/api/system/status",
+
+  // trip operations: QR, attendance, driver, GPS (schemas/operations.ts)
+  ticketQr: (bookingId: string) => `/api/me/bookings/${bookingId}/ticket-qr`,
+  selfCheckin: (bookingId: string) => `/api/me/bookings/${bookingId}/checkin`,
+  myBusPosition: (bookingId: string) => `/api/me/bookings/${bookingId}/bus-position`,
+  busQr: (busId: string) => `/api/buses/${busId}/qr`,
+  busQrRotate: (busId: string) => `/api/buses/${busId}/qr/rotate`,
+  tripDriver: (tripId: string) => `/api/trips/${tripId}/driver`,
+  tripAttendance: (tripId: string) => `/api/trips/${tripId}/attendance`,
+  tracking: "/api/tracking",
+  driverTrips: "/api/driver/trips",
+  driverManifest: (tripId: string) => `/api/driver/trips/${tripId}/manifest`,
+  driverCheckin: (tripId: string) => `/api/driver/trips/${tripId}/checkin`,
+  tripStart: (tripId: string) => `/api/driver/trips/${tripId}/start`,
+  tripEnd: (tripId: string) => `/api/driver/trips/${tripId}/end`,
+  tripLocations: (tripId: string) => `/api/driver/trips/${tripId}/locations`,
 } as const;

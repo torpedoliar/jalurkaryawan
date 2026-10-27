@@ -8,6 +8,14 @@ export const TEST_NOW = () => new Date("2026-10-14T00:00:00+07:00");
 export const server = setupServer(...(handlers as unknown as Parameters<typeof setupServer>));
 
 jest.mock("expo-secure-store", () => require("./secureStoreMock"));
+jest.mock("expo-location", () => ({
+  hasStartedLocationUpdatesAsync: jest.fn().mockResolvedValue(false),
+  stopLocationUpdatesAsync: jest.fn().mockResolvedValue(undefined),
+  requestForegroundPermissionsAsync: jest.fn().mockResolvedValue({ status: "denied" }),
+  requestBackgroundPermissionsAsync: jest.fn().mockResolvedValue({ status: "denied" }),
+  startLocationUpdatesAsync: jest.fn().mockResolvedValue(undefined), Accuracy: { High: 4 },
+}));
+jest.mock("expo-task-manager", () => ({ defineTask: jest.fn() }));
 
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 beforeEach(() => {

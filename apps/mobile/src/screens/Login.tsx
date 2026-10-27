@@ -18,6 +18,8 @@ export function Login() {
       <View style={{ gap: 4 }}>
         <Text style={{ fontFamily: F.black, fontSize: 34, color: C.ink }}>Jalur <Text style={{ backgroundColor: C.signal, color: C.signalInk }}> Karyawan </Text></Text>
         <Text accessibilityRole="header" style={S.eyebrow}>Bus Karyawan</Text>
+        <Text style={{ fontFamily: F.black, fontSize: 20, color: C.ink, marginTop: 6 }}>Perjalanan Nyaman, Kerja Tenang.</Text>
+        <Text style={S.text}>JALUR — Jemput Antar Layanan untuk Rutinitas Karyawan</Text>
       </View>
       <View style={[S.card, { gap: 10 }]}>
         <Text style={S.eyebrow}>NIK</Text>

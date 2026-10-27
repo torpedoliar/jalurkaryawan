@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { ENDPOINTS, SetupStatus, type Me } from "@bms/shared";
+import { ENDPOINTS, SELF_SERVICE_ROLES, SetupStatus, type Me } from "@bms/shared";
 import { api, apiEvents, loadSession, logout } from "./api";
 import { AuthContext } from "./auth";
 import { Btn, C, F, S, chip, chipText, today } from "./ui";
@@ -14,6 +14,8 @@ import { Subscriptions } from "./screens/Subscriptions";
 import { History } from "./screens/History";
 import { Notifications } from "./screens/Notifications";
 import { Departures } from "./screens/Departures";
+import { stopTracking } from "./tracking";
+import { Driver } from "./screens/Driver";
 
 export type Tab = "beranda" | "booking" | "langganan" | "riwayat" | "notifikasi" | "keberangkatan" | "ganti-password";
 const TABS: { id: Tab; label: string }[] = [
@@ -37,7 +39,7 @@ export function App({ initialTab }: { initialTab?: string }) {
 
   useEffect(() => {
     apiEvents.maintenance = () => setMaintenance(true);
-    apiEvents.loggedOut = () => setMe(null);
+    apiEvents.loggedOut = () => { void stopTracking().catch(() => undefined); setMe(null); };
   }, []);
 
   useEffect(() => {
@@ -52,11 +54,11 @@ export function App({ initialTab }: { initialTab?: string }) {
   }, [bootKey]);
 
   // One place for every way a session becomes usable: form login, SecureStore restore, forced password change.
-  const pushReady = me !== null && me.role === "EMPLOYEE" && !me.mustChangePassword;
+  const pushReady = me !== null && SELF_SERVICE_ROLES.includes(me.role) && !me.mustChangePassword;
   useEffect(() => { if (pushReady) void registerPush(); }, [pushReady]);
 
   const back = useCallback(() => { setMaintenance(false); setBootKey((k) => k + 1); }, []);
-  const signOut = useCallback(async () => { await unregisterPush(); await logout(); setMe(null); }, []);
+  const signOut = useCallback(async () => { try { await stopTracking(); } finally { await unregisterPush(); await logout(); setMe(null); } }, []);
 
   if (maintenance) return <Maintenance onDone={back} />;
   if (boot === "loading") return <View style={a.center}><Text style={S.eyebrow}>Memuat...</Text></View>;
@@ -76,10 +78,15 @@ export function App({ initialTab }: { initialTab?: string }) {
     <AuthContext.Provider value={{ me, setMe, signOut }}>
       {!me ? <Login />
         : me.mustChangePassword ? <ChangePassword forced />
-        : me.role !== "EMPLOYEE" ? (
+        : me.role === "DRIVER" ? (
+          <View style={{ flex: 1, backgroundColor: C.bg }}>
+            <View style={a.bar}><Text style={S.text}>{me.name} · Pengemudi</Text><Btn title="Keluar" onPress={() => void signOut()} /></View>
+            <ScrollView contentContainerStyle={a.body}><Driver /></ScrollView>
+          </View>
+        ) : !SELF_SERVICE_ROLES.includes(me.role) ? (
           <View style={a.center}>
             <View style={S.card}>
-              <Text style={S.text}>Aplikasi ini khusus karyawan. Gunakan web.</Text>
+              <Text style={S.text}>Akun ini tidak memakai aplikasi mobile. Gunakan web.</Text>
               <Btn title="Keluar" onPress={() => void signOut()} />
             </View>
           </View>

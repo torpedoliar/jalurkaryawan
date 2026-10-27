@@ -99,12 +99,12 @@ describe("app shell", () => {
   // Review Focus 3: each seed role's nav and landing page equals the spec §6.1-6.3 role table.
   test("each role's nav links and landing page match the spec", async () => {
     const expected: Record<string, string[]> = {
-      // 6.2 Karyawan: Beranda/Booking/Langganan/Riwayat/Notifikasi (+ shared Papan & Ganti Password). Landing = first = Beranda.
-      "K1001": ["Beranda", "Booking Harian", "Langganan", "Riwayat", "Notifikasi", "Papan Keberangkatan", "Ganti Password"],
-      // 6.1 Admin: the admin screens + shared, no employee screens, no Pengaturan (SUPER only). Landing = Vendor & Bus.
-      ga: ["Vendor & Bus", "Rute & Titik", "Shift & Jadwal", "Trip Harian", "Karyawan", "Admin & Vendor", "Dashboard", "Laporan", "Audit Log", "Papan Keberangkatan", "Ganti Password"],
-      // 6.1 Admin: everything ADMIN_GA sees plus Pengaturan. Landing = Vendor & Bus.
-      admin: ["Vendor & Bus", "Rute & Titik", "Shift & Jadwal", "Trip Harian", "Karyawan", "Admin & Vendor", "Dashboard", "Laporan", "Audit Log", "Pengaturan", "Papan Keberangkatan", "Ganti Password"],
+      // 6.2 Karyawan: Beranda/Booking/Langganan/Riwayat/Notifikasi (+ shared Papan & Ganti Password), in nav-group order. Landing = first = Beranda.
+      "K1001": ["Beranda", "Booking Harian", "Langganan", "Riwayat", "Papan Keberangkatan", "Notifikasi", "Ganti Password"],
+      // 6.1 Admin: the admin screens + shared, no employee screens, no Pengaturan (SUPER only). Landing = Dashboard.
+      ga: ["Beranda", "Booking Harian", "Langganan", "Riwayat", "Dashboard", "Papan Keberangkatan", "Notifikasi", "Trip Harian", "Tracking Bus", "Vendor & Bus", "Rute & Titik", "Shift & Jadwal", "Karyawan", "Admin & Vendor", "Laporan", "Audit Log", "Ganti Password"],
+      // 6.1 Admin: everything ADMIN_GA sees plus Pengaturan. Landing = Dashboard.
+      admin: ["Beranda", "Booking Harian", "Langganan", "Riwayat", "Dashboard", "Papan Keberangkatan", "Notifikasi", "Trip Harian", "Tracking Bus", "Vendor & Bus", "Rute & Titik", "Shift & Jadwal", "Karyawan", "Admin & Vendor", "Laporan", "Audit Log", "Pengaturan", "Ganti Password"],
       // 6.3 Vendor: read-only dashboard + shared. Landing = Dashboard Vendor.
       vendor: ["Dashboard Vendor", "Papan Keberangkatan", "Ganti Password"],
     };

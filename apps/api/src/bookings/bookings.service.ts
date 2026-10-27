@@ -61,6 +61,10 @@ export class BookingsService {
     // conditional flip + decrement in one tx (allocation's pattern): only the flip winner decrements,
     // so concurrent cancels cannot free the same seat twice
     await this.prisma.$transaction(async (tx) => {
+      if (trip) await tx.$queryRaw`SELECT "id" FROM "Trip" WHERE "id"=${trip.id} FOR UPDATE`;
+      await tx.$queryRaw`SELECT "id" FROM "Booking" WHERE "id"=${bookingId} FOR UPDATE`;
+      const attended = await tx.$queryRaw<{ bookingId: string }[]>`SELECT "bookingId" FROM "Attendance" WHERE "bookingId"=${bookingId}`;
+      if (attended.length) throw new DomainError('VALIDATION_ERROR', 'Booking yang sudah check-in tidak bisa dibatalkan.');
       const flipped = await tx.booking.updateMany({
         where: { id: bookingId, status: 'BOOKED' },
         data: { status: 'CANCELLED', cancelReason: 'USER', cancelledAt: new Date() },

@@ -1,0 +1,19 @@
+# Dedicated local-development database. Never shares the test or production volume.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: bms
+      POSTGRES_PASSWORD: bms_local_dev
+      POSTGRES_DB: bms_dev
+    ports:
+      - "127.0.0.1:${BMS_DEV_DB_PORT:-5434}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bms -d bms_dev"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+volumes:
+  pgdata:

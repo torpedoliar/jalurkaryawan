@@ -7,3 +7,10 @@ infra/certs/
 apps/web/test-results/
 apps/web/playwright-report/
 apps/mobile/.expo/
+
+# Local startup secret and backups
+.local/
+
+# Local tool state and generated code-graph output
+.zcode/
+graphify-out/

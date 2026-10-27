@@ -75,9 +75,16 @@ describe("app shell", () => {
     await waitFor(() => expect(screen.getByText("Papan Keberangkatan")).toBeTruthy(), { timeout: 5000 });
   }, 10_000);
 
-  test("non-employee role is rejected with logout", async () => {
+  test("admin can use the employee self-service screens", async () => {
     await renderApp("beranda", "admin");
-    expect(await screen.findByText("Aplikasi ini khusus karyawan. Gunakan web.")).toBeTruthy();
+    expect((await screen.findAllByText("Beranda")).length).toBeGreaterThan(0);
+    expect(screen.getByText("Booking Harian")).toBeTruthy();
+    expect(screen.getByText("Riwayat")).toBeTruthy();
+  });
+
+  test("an external vendor is rejected with logout", async () => {
+    await renderApp("beranda", "vendor");
+    expect(await screen.findByText("Akun ini tidak memakai aplikasi mobile. Gunakan web.")).toBeTruthy();
     await fireEvent.press(screen.getByText("Keluar"));
     expect(await screen.findByText("Masuk")).toBeTruthy();
   });

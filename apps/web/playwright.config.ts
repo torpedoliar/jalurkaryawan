@@ -16,7 +16,7 @@ export default defineConfig({
     url: "http://127.0.0.1:5241",
     reuseExistingServer: !process.env.CI,
     // Inherit VITE_USE_MOCK from the shell (test:api sets false) so live-mode e2e can reuse this webServer block.
-    env: { VITE_USE_MOCK: process.env.VITE_USE_MOCK ?? "true", VITE_PORT: "5241" },
+    env: { VITE_USE_MOCK: process.env.VITE_USE_MOCK ?? "true", VITE_PORT: "5241", VITE_DEMO_PROFILE: "legacy" },
     stdout: "pipe",
     stderr: "pipe",
   },

@@ -8,5 +8,6 @@ export * from "./schemas/master";
 export * from "./schemas/trips";
 export * from "./schemas/bookings";
 export * from "./schemas/reports";
+export * from "./schemas/operations";
 export * from "./time";
 export * from "./settings";

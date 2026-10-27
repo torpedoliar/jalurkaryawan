@@ -94,7 +94,7 @@ describe("trip harian", () => {
     const rows = sheetUtils.sheet_to_json<Record<string, unknown>>(wb.Sheets[wb.SheetNames[0]!]!);
     // 8 booked seats on this trip (8/8); the header row is the sheet's first row, not a data row here.
     expect(rows).toHaveLength(8);
-    expect(Object.keys(rows[0]!)).toEqual(["Jam", "Titik", "NIK", "Nama", "Departemen", "No HP"]);
+    expect(Object.keys(rows[0]!)).toEqual(["Jam", "Titik", "NIK", "Nama", "Departemen", "No HP", "Check-in", "Cara"]);
     // Derive the expected row from the trip's actual first non-cancelled booking, not a hard-coded seed name.
     const db = getDb();
     const trip = db.trips.find((t) => t.routeId === "r1" && t.date === "2026-10-14" && t.departureAt.endsWith("05:20:00+07:00"))!;

@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { ENDPOINTS, ImportCommitResponse, ImportPreview, Paginated, SuspendRequest, TempPassword, UserSummary } from "@bms/shared";
 import { api, saveBlob } from "../../api";
-import { ErrorText, Pager, readXlsx, today, useAction, useLoad } from "../../ui";
+import { ErrorText, PageHeader, Pager, Panel, Stat, StatGrid, readXlsx, today, useAction, useLoad } from "../../ui";
 
 /** Every create/reset returns its passwords exactly once, so keep every pair: newest per user wins. */
 export const addPasswords = (list: TempPassword[], fresh: TempPassword[]) =>
@@ -15,15 +15,13 @@ export function TempPasswords({ list, onClose }: { list: TempPassword[]; onClose
     "password-awal.csv",
   );
   return (
-    <section className="card">
+    <Panel className="editing" actions={<><button onClick={download}>Unduh</button><button onClick={onClose}>Tutup</button></>}>
       <table>
         <caption>Password sementara (hanya ditampilkan sekali, wajib diganti saat login)</caption>
         <thead><tr><th>NIK</th><th>Password</th></tr></thead>
         <tbody>{list.map((p) => <tr key={p.userId}><td>{p.nik}</td><td>{p.tempPassword}</td></tr>)}</tbody>
       </table>
-      <button onClick={download}>Unduh</button>
-      <button onClick={onClose}>Tutup</button>
-    </section>
+    </Panel>
   );
 }
 
@@ -77,15 +75,24 @@ export function Employees() {
     if (await run(() => api.post(ENDPOINTS.userSuspend(id), UserSummary, SuspendRequest.parse(body)))) { setSuspend(undefined); list.reload(); }
   }
 
+  const drop = () => { setSuspend(undefined); setOffId(""); setResetId(""); };
+  const suspended = (u: UserSummary) => Boolean(u.bookingSuspendedUntil && u.bookingSuspendedUntil >= today());
+  const suspending = suspend && list.data?.items.find((u) => u.id === suspend.id);
   return (
     <>
-      <h1>Karyawan</h1>
+      <PageHeader title="Karyawan" eyebrow="Pengguna" description="Akun karyawan penumpang: import dari Excel, reset password, bekukan booking, atau nonaktifkan." />
       <ErrorText error={error ?? list.error} />
       <TempPasswords list={passwords} onClose={() => setPasswords([])} />
+      {list.data && (
+        <StatGrid>
+          <Stat label="Total karyawan" value={list.data.total} hint="hasil filter saat ini" />
+          <Stat label="Ditampilkan" value={list.data.items.length} hint={`halaman ${page}`} />
+          <Stat label="Booking dibekukan" value={list.data.items.filter(suspended).length} hint="di halaman ini" tone="warn" />
+          <Stat label="Nonaktif" value={list.data.items.filter((u) => !u.active).length} hint="di halaman ini" tone={list.data.items.some((u) => !u.active) ? "bad" : "ok"} />
+        </StatGrid>
+      )}
 
-      <section className="card">
-        <h2>Import Excel</h2>
-        <p>Kolom: NIK, Nama, Departemen, No HP. NIK yang sudah ada akan diperbarui.</p>
+      <Panel className="form" title="Import Excel" description="Kolom: NIK, Nama, Departemen, No HP. NIK yang sudah ada akan diperbarui.">
         <label>File Excel<input type="file" accept=".xlsx,.xls,.csv" onChange={(e) => void pick(e.target.files?.[0])} /></label>
         {preview && (
           <>
@@ -97,55 +104,64 @@ export function Employees() {
                 <tbody>{preview.errors.map((x) => <tr key={x.row}><td>{x.row}</td><td>{x.message}</td></tr>)}</tbody>
               </table>
             )}
-            <button
-              className="primary"
-              disabled={busy || preview.errors.length > 0 || preview.created.length + preview.updated.length === 0}
-              onClick={() => void commit()}
-            >Simpan import</button>
+            <div className="row">
+              <button
+                className="primary"
+                disabled={busy || preview.errors.length > 0 || preview.created.length + preview.updated.length === 0}
+                onClick={() => void commit()}
+              >Simpan import</button>
+            </div>
           </>
         )}
         {rows?.length === 0 && <p>File tidak berisi baris data.</p>}
-      </section>
+      </Panel>
 
       {suspend && (
-        <form className="card row" onSubmit={saveSuspend}>
-          <p>Booking user yang belum lewat batas waktu akan dibatalkan.</p>
-          <label>Beku sampai<input type="date" min={today()} value={suspend.until} onChange={(e) => setSuspend({ ...suspend, until: e.target.value })} required /></label>
-          <label>Alasan<input value={suspend.reason} onChange={(e) => setSuspend({ ...suspend, reason: e.target.value })} required /></label>
-          <button className="primary" disabled={busy}>Simpan pembekuan</button>
-          <button type="button" onClick={() => setSuspend(undefined)}>Batal</button>
-        </form>
+        <Panel className="editing" title={`Bekukan booking${suspending ? `: ${suspending.name}` : ""}`} description="Booking user yang belum lewat batas waktu akan dibatalkan.">
+          <form className="row" onSubmit={saveSuspend}>
+            <label>Beku sampai<input type="date" min={today()} value={suspend.until} onChange={(e) => setSuspend({ ...suspend, until: e.target.value })} required /></label>
+            <label>Alasan<input value={suspend.reason} onChange={(e) => setSuspend({ ...suspend, reason: e.target.value })} required /></label>
+            <button className="primary" disabled={busy}>Simpan pembekuan</button>
+            <button type="button" onClick={() => setSuspend(undefined)}>Batal</button>
+          </form>
+        </Panel>
       )}
 
-      {/* A new page/search drops rows, so a row-scoped form or confirm would be bound to a row nobody can see. */}
-      <label>Cari NIK / nama<input value={q} onChange={(e) => { setQ(e.target.value); setPage(1); setSuspend(undefined); setOffId(""); setResetId(""); }} /></label>
-      <table className="card">
-        <caption>Daftar karyawan</caption>
-        <thead><tr><th>NIK</th><th>Nama</th><th>Departemen</th><th>No HP</th><th>Status</th><th></th></tr></thead>
-        <tbody>
-          {list.data?.items.map((u) => (
-            <tr key={u.id}>
-              <td>{u.nik}</td><td>{u.name}</td><td>{u.department}</td><td>{u.phone}</td><td>{statusText(u)}</td>
-              <td>
-                {u.active && (
-                  <>
-                    {resetId === u.id
-                      ? <button disabled={busy} onClick={() => void resetPassword(u.id)}>Ya, reset password</button>
-                      : <button onClick={() => setResetId(u.id)}>Reset password</button>}
-                    {u.bookingSuspendedUntil && u.bookingSuspendedUntil >= today()
-                      ? <button disabled={busy} onClick={() => void act(ENDPOINTS.userUnsuspend(u.id))}>Cabut pembekuan</button>
-                      : <button onClick={() => setSuspend({ id: u.id, until: "", reason: "" })}>Bekukan</button>}
-                    {offId === u.id
-                      ? <button disabled={busy} onClick={() => void act(ENDPOINTS.userDeactivate(u.id))}>Ya, nonaktifkan</button>
-                      : <button onClick={() => setOffId(u.id)}>Nonaktifkan</button>}
-                  </>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <Pager data={list.data} page={page} onPage={(p) => { setPage(p); setSuspend(undefined); setOffId(""); setResetId(""); }} />
+      <Panel>
+        <div className="toolbar">
+          {/* A new page/search drops rows, so a row-scoped form or confirm would be bound to a row nobody can see. */}
+          <label>Cari NIK / nama<input value={q} onChange={(e) => { setQ(e.target.value); setPage(1); drop(); }} /></label>
+          <p className="count">{list.data?.total ?? 0} karyawan</p>
+        </div>
+        <div className="table-scroll tall"><table>
+          <caption>Daftar karyawan</caption>
+          <thead><tr><th>NIK</th><th>Nama</th><th>Departemen</th><th>No HP</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            {list.data?.items.map((u) => (
+              <tr key={u.id}>
+                <td>{u.nik}</td><td><span className="user-cell"><span className="avatar sm" aria-hidden="true">{u.name.slice(0, 1).toUpperCase()}</span><span>{u.name}</span></span></td><td>{u.department}</td><td>{u.phone}</td>
+                <td>{!u.active ? <span className="pill bad">{statusText(u)}</span> : suspended(u) ? <span className="pill warn">{statusText(u)}</span> : <span className="pill ok">{statusText(u)}</span>}</td>
+                <td>
+                  {u.active && (
+                    <div className="actions">
+                      {resetId === u.id
+                        ? <button className="danger armed" disabled={busy} onClick={() => void resetPassword(u.id)}>Ya, reset password</button>
+                        : <button onClick={() => setResetId(u.id)}>Reset password</button>}
+                      {suspended(u)
+                        ? <button disabled={busy} onClick={() => void act(ENDPOINTS.userUnsuspend(u.id))}>Cabut pembekuan</button>
+                        : <button onClick={() => setSuspend({ id: u.id, until: "", reason: "" })}>Bekukan</button>}
+                      {offId === u.id
+                        ? <button className="danger armed" disabled={busy} onClick={() => void act(ENDPOINTS.userDeactivate(u.id))}>Ya, nonaktifkan</button>
+                        : <button className="danger" onClick={() => setOffId(u.id)}>Nonaktifkan</button>}
+                    </div>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table></div>
+        <Pager data={list.data} page={page} onPage={(p) => { setPage(p); drop(); }} />
+      </Panel>
     </>
   );
 }

@@ -56,6 +56,22 @@ describe("admin master data", () => {
     expect(getDb().stops.find((s) => s.name === "Halte Baru")).toMatchObject({ routeId: "r1", seq: 4, offsetMinutes: 45 });
   });
 
+  test("a stop's coordinates are saved from the manual fields and marked on the map list", async () => {
+    const { user } = await renderApp("/rute", "ga");
+    await user.selectOptions(await screen.findByLabelText("Lihat titik rute"), "r1");
+    const stops = await screen.findByRole("table", { name: "Titik jemput" });
+    const row = (await within(stops).findByText("Terminal Cikarang")).closest("tr")!;
+    expect(within(row).getByText("Belum dipetakan")).toBeTruthy();
+    expect(screen.getByRole("application", { name: "Peta titik jemput" })).toBeTruthy();
+
+    await user.click(within(row).getByRole("button", { name: "Ubah" }));
+    await user.type(screen.getByLabelText("Latitude"), "-6.285");
+    await user.type(screen.getByLabelText("Longitude"), "107.171");
+    await user.click(screen.getByRole("button", { name: "Simpan titik" }));
+    expect(await within(row).findByText("Di peta")).toBeTruthy();
+    expect(getDb().stops.find((s) => s.name === "Terminal Cikarang")).toMatchObject({ lat: -6.285, lng: 107.171 });
+  });
+
   test("duplicate route code shows server message", async () => {
     const { user } = await renderApp("/rute", "ga");
     await user.type(await screen.findByLabelText("Kode"), "R1");

@@ -13,10 +13,12 @@ export function Maintenance({ onDone }: { onDone(): void }) {
     return () => clearInterval(id);
   }, [onDone]);
   return (
-    <div className="center">
-      <div className="card">
+    <div className="maint-layout">
+      <div className="card maint-card">
+        <div className="maint-icon" aria-hidden="true">↻</div>
         <h1>Sistem sedang dalam pemeliharaan</h1>
         <p>Sistem sedang memulihkan database. Halaman akan kembali otomatis.</p>
+        <p className="count">Memeriksa status setiap 2 detik · jangan tutup halaman ini</p>
       </div>
     </div>
   );

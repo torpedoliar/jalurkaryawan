@@ -2,7 +2,7 @@ import {
   ERROR_MESSAGES, Settings, jakartaDate, toJakartaIso,
   type AuditLog, type BackupFile, type BookingSource, type BookingStatus, type Bus, type CancelReason,
   type Direction, type ErrorCode, type Notification, type NotificationType, type RejectedRequest, type Route, type Shift, type Stop,
-  type Subscription, type Trip, type TripTemplate, type UserSummary, type Vendor,
+  type Subscription, type Trip, type TripTemplate, type UserSummary, type Vendor, type Attendance, type ExecutionStatus,
 } from "@bms/shared";
 
 export interface UserRow extends UserSummary { password: string; mustChangePassword: boolean; failedLogins: number }
@@ -15,13 +15,21 @@ export interface BookingRow {
 
 export interface NotificationRow extends Notification { userId: string }
 
+/** Trip operations (schemas/operations.ts). QR maps hold the full opaque payload -> owner id. */
+export interface ExecutionRow { tripId: string; driverId: string; status: ExecutionStatus; startedAt: string | null; endedAt: string | null }
+export interface LocationRow { tripId: string; sampleId: string; lat: number; lng: number; accuracy: number | null; capturedAt: string }
+export interface Ops {
+  tripDrivers: Map<string, string>; attendance: Attendance[]; executions: ExecutionRow[]; locations: LocationRow[];
+  busQr: Map<string, { qr: string; rotatedAt: string }>; ticketQr: Map<string, string>;
+}
+
 export interface Db {
   now: () => Date;
   seq: number;
   users: UserRow[]; vendors: Vendor[]; buses: Bus[]; shifts: Shift[]; routes: Route[]; stops: Stop[];
   templates: TripTemplate[]; trips: Trip[]; subscriptions: Subscription[]; bookings: BookingRow[];
   rejected: RejectedRequest[]; notifications: NotificationRow[]; audit: AuditLog[];
-  settings: Settings; backups: BackupFile[]; maintenance: boolean;
+  settings: Settings; backups: BackupFile[]; maintenance: boolean; ops: Ops;
   /** access token -> userId */
   sessions: Map<string, string>;
 }
@@ -32,6 +40,7 @@ export function createDb(now: () => Date = () => new Date()): Db {
     users: [], vendors: [], buses: [], shifts: [], routes: [], stops: [], templates: [], trips: [],
     subscriptions: [], bookings: [], rejected: [], notifications: [], audit: [],
     settings: Settings.parse({}), backups: [], maintenance: false, sessions: new Map(),
+    ops: { tripDrivers: new Map(), attendance: [], executions: [], locations: [], busQr: new Map(), ticketQr: new Map() },
   };
 }
 

@@ -279,8 +279,8 @@ describe("backup", () => {
 describe("hak akses", () => {
   test("an ADMIN_GA cannot open /pengaturan", async () => {
     await renderApp("/pengaturan", "ga");
-    // carry defect 5 (corrected): /vendor-bus is the first row an ADMIN_GA can see, so that is the landing.
-    expect(await screen.findByRole("heading", { name: "Vendor & Bus" })).toBeTruthy();
+    // /dashboard is the first row an ADMIN_GA can see, so that is the landing.
+    expect(await screen.findByRole("heading", { name: "Dashboard" })).toBeTruthy();
     expect(screen.queryByRole("link", { name: "Pengaturan" })).toBeNull();
   });
 });

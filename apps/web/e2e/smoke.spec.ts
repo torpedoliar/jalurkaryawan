@@ -36,7 +36,7 @@ test("login, daily booking, then cancel", async ({ page }) => {
 
   // 3. The new booking is on Beranda, and cancelling flips its status
   await page.getByRole("link", { name: "Beranda" }).click();
-  const card = page.locator("article").filter({ hasText: `${DATE} · Jemput · R2 Bekasi Timur` });
+  const card = page.locator("article").filter({ hasText: DATE }).filter({ hasText: "Jemput · R2 Bekasi Timur" });
   await expect(card).toHaveCount(1);
   await expect(card.getByText("Terbooked")).toBeVisible();
   await card.getByRole("button", { name: "Batalkan" }).click();

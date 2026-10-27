@@ -79,6 +79,8 @@ export class TripsService {
     // mock allocate ADMIN_TRIP parity: bookedCount-- per BOOKED row flipped. Interactive tx: read the
     // victims, flip, decrement by the flip COUNT (a concurrent user cancel cannot double-free a seat)
     const { updated, bookings } = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "Trip" WHERE "id"=${tripId} FOR UPDATE`;
+      if (await tx.attendance.count({ where: { tripId } }) || await tx.tripOperation.count({ where: { tripId, status: 'IN_PROGRESS' } })) throw new DomainError('VALIDATION_ERROR', 'Trip sudah berjalan atau memiliki penumpang check-in.');
       const bookings = await tx.booking.findMany({ where: { tripId, status: 'BOOKED' } });
       const flipped = await tx.booking.updateMany({
         where: { id: { in: bookings.map((b) => b.id) }, status: 'BOOKED' },

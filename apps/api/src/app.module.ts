@@ -17,11 +17,14 @@ import { ReportsModule } from './reports/reports.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { SchedulerModule } from './scheduler/scheduler.module';
 import { BackupModule } from './backup/backup.module';
+import { OperationsController } from './operations/operations.controller';
+import { OperationsService } from './operations/operations.service';
 
 @Module({
-  controllers: [HealthController],
+  controllers: [HealthController, OperationsController],
   imports: [SettingsModule, AuthModule, NotificationsModule, FleetModule, RoutesModule, UsersModule, TripsModule, BookingsModule, AdminModule, ReportsModule, ScheduleModule.forRoot(), SchedulerModule, BackupModule],
   providers: [
+    OperationsService,
     MaintenanceGuard,
     { provide: APP_GUARD, useExisting: MaintenanceGuard },
     { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },

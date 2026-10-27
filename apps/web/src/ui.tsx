@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { ZodError, type ZodTypeAny } from "zod";
 import { read, utils, write } from "xlsx";
 import { jakartaDate, type BookingStatus, type DepartureStatus, type Direction } from "@bms/shared";
+import { useLocation } from "react-router-dom";
 import { ApiFailure, api, saveBlob } from "./api";
+import { Icon, PAGE_ICON } from "./icons";
 
 const NUM: Record<string, string | undefined> = { string: "karakter", array: "elemen" };
 
@@ -71,6 +73,55 @@ export function ErrorText({ error }: { error: string | null | undefined }) {
   return error ? <p role="alert" className="error">{error}</p> : null;
 }
 
+/** Page title block: what the screen is for, with page-wide controls (dates, filters) on the right. */
+export function PageHeader({ title, eyebrow, description, actions }: { title: string; eyebrow?: string; description?: ReactNode; actions?: ReactNode }) {
+  const { pathname } = useLocation();
+  const icon = PAGE_ICON[pathname];
+  return (
+    <header className="page-head">
+      <div className="page-title">
+        {icon && <span className="page-icon"><Icon name={icon} size={22} /></span>}
+        <div className="page-title-text">
+          {eyebrow && <span className="eyebrow">{eyebrow}</span>}
+          <h1>{title}</h1>
+          {description && <p className="muted">{description}</p>}
+        </div>
+      </div>
+      {actions && <div className="page-actions">{actions}</div>}
+    </header>
+  );
+}
+
+/** One functional block of a page. A table's own <caption> can serve as the title instead of `title`. */
+export function Panel({ title, description, actions, children, className }: {
+  title?: ReactNode; description?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string;
+}) {
+  return (
+    <section className={className ? `panel ${className}` : "panel"}>
+      {(title || actions) && (
+        <div className="panel-head">
+          <div>
+            {title && <h2>{title}</h2>}
+            {description && <p className="muted">{description}</p>}
+          </div>
+          {actions && <div className="row">{actions}</div>}
+        </div>
+      )}
+      {children}
+    </section>
+  );
+}
+
+export const YesNo = ({ on }: { on: boolean }) => <span className={on ? "pill ok" : "pill"}>{on ? "Ya" : "Tidak"}</span>;
+/** Summary cards above a table or form. Keep the values textual so tests and screen readers read them. */
+export function StatGrid({ children, cols = 4 }: { children: ReactNode; cols?: 2 | 3 | 4 }) {
+  return <div className={`stat-grid cols-${cols}`}>{children}</div>;
+}
+export function Stat({ label, value, hint, tone = "default" }: { label: string; value: ReactNode; hint?: ReactNode; tone?: "default" | "ok" | "warn" | "bad" | "accent" }) {
+  return <div className={`stat-card ${tone}`}><span>{label}</span><b>{value}</b>{hint && <small>{hint}</small>}</div>;
+}
+
+
 const STATUS_LABEL: Record<DepartureStatus, string> = { AVAILABLE: "TERSEDIA", ALMOST: "HAMPIR", FULL: "PENUH", CANCELLED: "BATAL" };
 export function StatusBadge({ status }: { status: DepartureStatus }) {
   return <span className={`badge ${status}`}>{STATUS_LABEL[status]}</span>;
@@ -89,7 +140,7 @@ export const dayNames = (weekdays: number[]) => weekdays.map((d) => DAYS[d - 1])
 export function WeekdayPicker({ value, onChange }: { value: number[]; onChange(v: number[]): void }) {
   const toggle = (d: number) => onChange(value.includes(d) ? value.filter((x) => x !== d) : [...value, d].sort());
   return (
-    <fieldset className="row">
+    <fieldset className="row weekday-picker">
       <legend>Hari</legend>
       {DAYS.map((d, i) => (
         <label key={d}><input type="checkbox" checked={value.includes(i + 1)} onChange={() => toggle(i + 1)} />{d}</label>
@@ -135,7 +186,7 @@ export async function readXlsx(file: File): Promise<unknown[]> {
 export function Pager({ data, page, onPage }: { data?: { total: number; pageSize: number }; page: number; onPage(p: number): void }) {
   const pages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
   return (
-    <div className="row">
+    <div className="row pager">
       <button disabled={page <= 1} onClick={() => onPage(page - 1)}>Sebelumnya</button>
       <span>Halaman {page} dari {pages}</span>
       <button disabled={page >= pages} onClick={() => onPage(page + 1)}>Berikutnya</button>

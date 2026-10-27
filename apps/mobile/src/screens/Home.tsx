@@ -1,4 +1,9 @@
 import { StyleSheet, Text, View } from "react-native";
+import { useState } from "react";
+import { operations } from "../operations";
+import { Ticket, type TicketCode } from "./Ticket";
+import { Scanner } from "./Scanner";
+import { BusPosition } from "./BusPosition";
 import { z } from "zod";
 import { Booking, ENDPOINTS, addDays } from "@bms/shared";
 import { api } from "../api";
@@ -9,6 +14,15 @@ export function Home() {
   const from = today();
   const list = useLoad(() => api.get(ENDPOINTS.myBookings, z.array(Booking), { from, to: addDays(from, 6) }), [from]);
   const { busy, error, run } = useAction();
+  const [ticket, setTicket] = useState<TicketCode | null>(null);
+  const [positionBooking, setPositionBooking] = useState<string | null>(null);
+  const [scan, setScan] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  async function showTicket(id: string) {
+    setTicket(null);
+    const result = await run(() => operations.ticket(id));
+    if (result) setTicket(result);
+  }
   async function cancel(id: string) {
     if (await run(() => api.post(ENDPOINTS.bookingCancel(id), Booking))) list.reload();
   }
@@ -16,6 +30,16 @@ export function Home() {
     <View style={S.screen}>
       <Title kicker="7 hari ke depan">Beranda</Title>
       <ErrorText error={error ?? list.error} />
+      {message && <Text accessibilityLiveRegion="polite" style={S.text}>{message}</Text>}
+      {positionBooking && <BusPosition key={positionBooking} bookingId={positionBooking} onClose={() => setPositionBooking(null)} />}
+      {ticket && <Ticket ticket={ticket} onClose={() => setTicket(null)} />}
+      {scan && <Scanner onClose={() => setScan(null)} onScan={async (payload) => {
+        setMessage(null);
+        const result = await operations.selfCheckin(scan, payload);
+        setMessage(result.alreadyCheckedIn ? "Anda sudah check-in (dikonfirmasi server)." : "Check-in dikonfirmasi server.");
+        list.reload();
+      }} />}
+      <Btn title="Muat ulang booking" onPress={list.reload} />
       {list.data?.length === 0 && <Text style={S.text}>Belum ada booking 7 hari ke depan.</Text>}
       {list.data?.map((b) => {
         const [origin, dest] = b.direction === "PICKUP" ? [b.stopName, "Kantor"] : ["Kantor", b.stopName];
@@ -49,6 +73,9 @@ export function Home() {
             </View>
             {b.status === "BOOKED" && (
               <View style={[t.row, t.act]}>
+                <Btn title="Pindai QR bus untuk check-in" onPress={() => { setMessage(null); setScan(b.id); }} />
+                <Btn title="Lihat posisi bus" onPress={() => setPositionBooking(b.id)} />
+                <Btn title="Tampilkan tiket QR" onPress={() => void showTicket(b.id)} disabled={busy} />
                 {Date.now() < Date.parse(b.cutoffAt)
                   ? <><Text style={t.small}>Batal maks. {hhmm(b.cutoffAt)}</Text><Btn title="Batalkan" onPress={() => void cancel(b.id)} disabled={busy} /></>
                   : <Text style={t.small}>Batas batal lewat</Text>}
@@ -81,6 +108,6 @@ const t = StyleSheet.create({
   bar: { width: 40, height: 3 },
   perf: { borderTopWidth: 2, borderStyle: "dashed", borderColor: C.line, marginHorizontal: 12 },
   stub: { padding: 14, alignItems: "flex-start" },
-  act: { justifyContent: "space-between", paddingHorizontal: 14, paddingBottom: 14 },
+  act: { justifyContent: "space-between", flexWrap: "wrap", paddingHorizontal: 14, paddingBottom: 14 },
   small: { fontFamily: F.mono, fontSize: 12, color: C.muted },
 });

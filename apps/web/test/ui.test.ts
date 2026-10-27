@@ -42,7 +42,7 @@ describe("errorText", () => {
 
   test("schema author's Indonesian messages pass through unchanged", () => {
     const err = UserInput.safeParse({ nik: "V1", name: "Vendor", role: "VENDOR", vendorId: null }).error;
-    expect(errorText(err)).toBe("vendorId wajib hanya untuk role VENDOR");
+    expect(errorText(err)).toBe("vendorId wajib hanya untuk role VENDOR dan DRIVER");
   });
 
   test("custom message on a min() check still passes through", async () => {

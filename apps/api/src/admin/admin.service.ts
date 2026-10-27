@@ -155,8 +155,14 @@ export class AdminService {
       );
     }
     const before = { busId: trip.busId, capacity: trip.capacity };
-    const updated = await this.prisma.trip.update({
-      where: { id: tripId }, data: { busId, capacity: bus.capacity },
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "Trip" WHERE "id"=${tripId} FOR UPDATE`;
+      const current = await tx.trip.findUniqueOrThrow({ where: { id: tripId } });
+      if (current.departureAt <= new Date() || current.status !== 'SCHEDULED') throw new DomainError('VALIDATION_ERROR', 'Trip sudah berangkat atau dibatalkan.');
+      if (await tx.attendance.count({ where: { tripId } }) || await tx.tripOperation.count({ where: { tripId, status: 'IN_PROGRESS' } })) throw new DomainError('VALIDATION_ERROR', 'Bus tidak bisa diganti setelah perjalanan atau check-in dimulai.');
+      if (bus.capacity < current.bookedCount) throw new DomainError('CAPACITY_BELOW_BOOKED', 'Kapasitas bus di bawah jumlah booking.');
+      await tx.tripOperation.deleteMany({ where: { tripId } });
+      return tx.trip.update({ where: { id: tripId }, data: { busId, capacity: bus.capacity } });
     });
     const bookings = await this.prisma.booking.findMany({ where: { tripId, status: 'BOOKED' } });
     for (const b of bookings) {
@@ -180,6 +186,10 @@ export class AdminService {
   /** Conditional BOOKED flip + decrement (T8 pattern): only the flip winner frees the seat. */
   private async cancelBooking(bookingId: string, tripId: string | null, reason: 'SUSPENDED' | 'USER_DEACTIVATED'): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
+      if (tripId) await tx.$queryRaw`SELECT "id" FROM "Trip" WHERE "id"=${tripId} FOR UPDATE`;
+      await tx.$queryRaw`SELECT "id" FROM "Booking" WHERE "id"=${bookingId} FOR UPDATE`;
+      const attended = await tx.$queryRaw<{ bookingId: string }[]>`SELECT "bookingId" FROM "Attendance" WHERE "bookingId"=${bookingId}`;
+      if (attended.length) return;
       const flipped = await tx.booking.updateMany({
         where: { id: bookingId, status: 'BOOKED' },
         data: { status: 'CANCELLED', cancelReason: reason, cancelledAt: new Date() },

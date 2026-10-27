@@ -68,6 +68,10 @@ export function allocateSeat(db: Db, i: AllocateInput): BookingRow {
 /** Spec 5.5. checkCutoff false is for admin paths that ignore cutoff (deactivate, cancel trip). */
 export function cancelBooking(db: Db, booking: BookingRow, reason: CancelReason, opts: { checkCutoff: boolean }): void {
   if (booking.status !== "BOOKED") return;
+  if (db.ops.attendance.some((a) => a.bookingId === booking.id)) {
+    if (reason === "USER") throw new DomainError("VALIDATION_ERROR", "Booking yang sudah check-in tidak bisa dibatalkan.");
+    return;
+  }
   const trip = db.trips.find((t) => t.id === booking.tripId)!;
   if (opts.checkCutoff && isPastCutoff(trip.departureAt, db.settings.booking_cutoff_minutes, db.now())) {
     throw new DomainError("CUTOFF_PASSED");

@@ -271,3 +271,20 @@ describe("import", () => {
     expect(r.body.errors).toEqual([{ row: 2, message: "nik: format tidak sesuai." }]);
   });
 });
+
+describe("self-service roles", () => {
+  test("an admin can book, cancel and list their own booking", async () => {
+    const { token } = await login("admin");
+    const created = await api(ENDPOINTS.bookings, { token, body: {
+      routeId: "r2", stopId: "r2s1", shiftId: "siang", direction: "PICKUP", date: "2026-10-15",
+    } });
+    expect(created.status).toBe(200);
+    const mine = await api(ENDPOINTS.myBookings, { token });
+    expect(mine.body.some((b: Json) => b.id === created.body.id)).toBe(true);
+
+    const cancelled = await api(ENDPOINTS.bookingCancel(created.body.id), { token, method: "POST" });
+    expect(cancelled.body.status).toBe("CANCELLED");
+    const after = await api(ENDPOINTS.myBookings, { token });
+    expect(after.body.find((b: Json) => b.id === created.body.id).status).toBe("CANCELLED");
+  });
+});

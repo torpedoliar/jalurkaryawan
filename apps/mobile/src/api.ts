@@ -1,4 +1,5 @@
 import * as SecureStore from "expo-secure-store";
+import { stopTracking } from "./tracking";
 import { ApiError, ENDPOINTS, LoginResponse, Me, type ErrorCode } from "@bms/shared";
 import type { ZodTypeAny, z } from "zod";
 
@@ -14,6 +15,15 @@ const BASE = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost").replace(/\/
 /** Access token lives in memory only; the refresh token lives in SecureStore. */
 let token: string | null = null;
 export const setToken = (t: string | null) => { token = t; };
+/** Headless background tasks restore SecureStore auth before sending protected telemetry. */
+export async function ensureSession(): Promise<void> {
+  if (!token && !(await restoreSession())) {
+    // Missing/revoked credentials stop headless tracking without relying on an App effect.
+    // A network-only refresh failure retains the refresh credential for retry.
+    if (!(await storedRefresh())) await stopTracking().catch(() => undefined);
+    throw new Error("Sesi login diperlukan untuk mengirim lokasi.");
+  }
+}
 
 export const apiEvents = { maintenance: () => {}, loggedOut: () => {} };
 
@@ -59,7 +69,11 @@ export function restoreSession(): Promise<Me | null> {
       return null;
     }
     if (!r.ok) {
-      await SecureStore.deleteItemAsync(REFRESH_KEY).catch(() => undefined);
+      if (r.status === 401 || r.status === 403) {
+        token = null;
+        await SecureStore.deleteItemAsync(REFRESH_KEY).catch(() => undefined);
+        await stopTracking().catch(() => undefined);
+      }
       return null;
     }
     const out = LoginResponse.parse(await r.json());
@@ -89,6 +103,7 @@ async function call(method: string, path: string, opts: Opts = {}): Promise<Resp
   if (f.status === 401 && retryable) {
     token = null;
     await SecureStore.deleteItemAsync(REFRESH_KEY).catch(() => undefined);
+    await stopTracking().catch(() => undefined);
     apiEvents.loggedOut();
   }
   throw f;
@@ -120,6 +135,7 @@ export async function loadSession(): Promise<Me | null> {
 }
 
 export async function logout(): Promise<void> {
+  await stopTracking().catch(() => undefined);
   const rt = await storedRefresh();
   await send("POST", ENDPOINTS.logout, rt ? { body: { refreshToken: rt } } : {}).catch(() => undefined);
   token = null;
