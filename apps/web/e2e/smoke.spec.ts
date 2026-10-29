@@ -27,8 +27,10 @@ test("login, daily booking, then cancel", async ({ page }) => {
   await page.getByLabel("Shift").selectOption("malam");
   await page.getByLabel("Arah").selectOption({ label: "Jemput" });
   await page.getByLabel("Rute").selectOption({ label: "R2 Bekasi Timur" });
+  await expect(page.getByRole("img", { name: "Peta titik jemput R2" })).toBeVisible();
+  await expect(page.getByRole("list", { name: "Urutan titik jemput" }).getByText("Stasiun Bekasi Timur")).toBeVisible();
   // Titik jemput only appears once a route is chosen.
-  await page.getByLabel("Titik jemput").selectOption({ label: "1. Halte Bulak Kapal" });
+  await page.getByRole("combobox", { name: "Titik jemput" }).selectOption({ label: "1. Halte Bulak Kapal" });
 
   await expect(page.getByText(/Sisa kursi: \d+ dari 50/)).toBeVisible();
   await page.getByRole("button", { name: "Pesan" }).click();

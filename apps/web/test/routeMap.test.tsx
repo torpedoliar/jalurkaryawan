@@ -25,6 +25,26 @@ describe("route map editing", () => {
     expect(container.querySelectorAll(".map-pin")).toHaveLength(1);
   });
 
+  test("read-only customer preview lists stops, is not interactive and labels missing coordinates", () => {
+    const stops = [
+      { id: "s1", name: "Terminal", seq: 1, lat: -6.3, lng: 107.15, active: true },
+      { id: "s3", name: "Pasar", seq: 3, lat: null, lng: null, active: true },
+      { id: "s2", name: "Nonaktif", seq: 2, lat: -6.31, lng: 107.16, active: false },
+    ];
+    const { container, getByRole, getByText } = render(
+      <RouteMap stops={stops} color="#123456" readOnly compact label="Peta titik jemput R1" />,
+    );
+
+    expect(getByRole("img", { name: "Peta titik jemput R1" })).toBeTruthy();
+    expect(container.querySelectorAll(".map-pin")).toHaveLength(1);
+    expect(Array.from(container.querySelectorAll(".route-stop-list li")).map((x) => x.textContent)).toEqual([
+      "1Terminal", "3Pasarlokasi belum tersedia",
+    ]);
+    expect(container.querySelector(".map-note")?.textContent).toContain("1 titik aktif belum memiliki koordinat dan tidak dapat ditampilkan di peta.");
+    expect(container.querySelector(".leaflet-marker-draggable")).toBeNull();
+    expect(container.querySelector(".map-foot button")).toBeNull();
+  });
+
   test("dropping a saved pin reports the stop and its new position", async () => {
     const onMove = vi.fn();
     const scrollTo = vi.spyOn(window, "scrollTo").mockImplementation(() => {});

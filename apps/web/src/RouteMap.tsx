@@ -27,10 +27,10 @@ const valid = (lat: number | null, lng: number | null): boolean => lat !== null 
  * - clicking a pin asks the page to open that stop in the form (`onSelect`)
  * The map only re-fits when the set of shown stops changes, so a drag does not yank the view back.
  */
-export function RouteMap({ stops, color, draft, onPick, onMove, onSelect, showInactive = false, redraw = 0 }: {
+export function RouteMap({ stops, color, draft, onPick, onMove, onSelect, showInactive = false, redraw = 0, readOnly = false, compact = false, label = "Peta titik jemput" }: {
   stops: MapStop[]; color: string; draft?: { id: string; lat: number | null; lng: number | null };
   onPick?(p: LatLng): void; onMove?(stopId: string, p: LatLng): void; onSelect?(stopId: string): void;
-  showInactive?: boolean; redraw?: number;
+  showInactive?: boolean; redraw?: number; readOnly?: boolean; compact?: boolean; label?: string;
 }) {
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<L.Map>();
@@ -63,7 +63,7 @@ export function RouteMap({ stops, color, draft, onPick, onMove, onSelect, showIn
   // The stop in the form stays on the map even when its row is inactive and inactive rows are hidden.
   const shown = placed.filter((s) => showInactive || s.active || s.id === draft?.id);
   const draftPos = draft && valid(draft.lat, draft.lng) ? { lat: draft.lat!, lng: draft.lng! } : null;
-  const key = JSON.stringify([shown, draftPos, draft?.id, color, redraw, fitTick]);
+  const key = JSON.stringify([shown, draftPos, draft?.id, color, redraw, fitTick, readOnly]);
 
   useEffect(() => {
     const m = map.current, g = layer.current;
@@ -76,15 +76,16 @@ export function RouteMap({ stops, color, draft, onPick, onMove, onSelect, showIn
       const pos = editing && draftPos ? draftPos : { lat: s.lat!, lng: s.lng! };
       points.push([pos.lat, pos.lng]);
       const mk = L.marker([pos.lat, pos.lng], {
-        icon: pin(String(s.seq), s.active ? color : "#8C98A6", editing, s.active),
-        draggable: s.active,
+        icon: pin(String(s.seq), s.active ? color : "#8C98A6", editing, s.active && !readOnly),
+        draggable: !readOnly && s.active,
         title: `${s.seq}. ${s.name}`,
+        interactive: !readOnly,
       });
       const tip = document.createElement("span");
       tip.textContent = `${s.seq}. ${s.name}${s.active ? "" : " (nonaktif)"}`;
       mk.bindTooltip(tip);
       mk.on("click", () => select.current?.(s.id));
-      if (s.active) mk.on("dragend", () => {
+      if (!readOnly && s.active) mk.on("dragend", () => {
         const p = mk.getLatLng();
         const at = { lat: round(p.lat), lng: round(p.lng) };
         // An edited stop belongs to the form until Simpan; every other pin saves on drop.
@@ -100,7 +101,7 @@ export function RouteMap({ stops, color, draft, onPick, onMove, onSelect, showIn
     }
     // Only active stops are part of the route line: a deactivated stop is no longer served.
     const line = shown.filter((s) => s.active).map((s) => (draft?.id === s.id && draftPos ? [draftPos.lat, draftPos.lng] : [s.lat!, s.lng!]) as L.LatLngTuple);
-    if (line.length > 1) L.polyline(line, { color, weight: 4, opacity: .75, dashArray: "8 8" }).addTo(g);
+    if (line.length > 1) L.polyline(line, { color, weight: 4, opacity: .75, dashArray: "8 8", interactive: !readOnly }).addTo(g);
     const ids = shown.map((s) => s.id).join(",");
     if (points.length > 0 && (ids !== fitted.current || fitTick > 0)) {
       fitted.current = ids;
@@ -110,17 +111,31 @@ export function RouteMap({ stops, color, draft, onPick, onMove, onSelect, showIn
   }, [key]);
 
   const movable = !!onMove;
+  const placedIds = new Set(placed.map((s) => s.id));
+  const unplaced = stops.filter((s) => s.active && !placedIds.has(s.id)).sort((a, b) => a.seq - b.seq);
   return (
-    <div className="map-wrap">
-      <div ref={el} className="map" role="application" aria-label="Peta titik jemput" />
+    <div className={`map-wrap${compact ? " route-map-compact" : ""}`}>
+      <div ref={el} className="map" role={readOnly ? "img" : "application"} aria-label={label} />
+      {readOnly && stops.length > 0 && (
+        <ol className="route-stop-list" aria-label="Urutan titik jemput">
+          {stops.filter((s) => s.active).sort((a, b) => a.seq - b.seq).map((s) => (
+            <li key={s.id}>
+              <span className="route-stop-number" style={{ background: color }}>{s.seq}</span>
+              <span>{s.name}</span>
+              {!valid(s.lat, s.lng) && <small>lokasi belum tersedia</small>}
+            </li>
+          ))}
+        </ol>
+      )}
       <div className="map-foot">
         <p className="map-note">
           {onPick ? "Klik peta atau geser pin untuk menentukan lokasi titik. " : ""}
           {movable ? "Menyeret pin titik yang sudah tersimpan langsung menyimpan posisi barunya; klik pin untuk mengubah data titik. " : ""}
-          Garis putus-putus menghubungkan titik aktif sesuai urutan, bukan jalur jalan sebenarnya.
+          {readOnly ? "Garis putus-putus menunjukkan urutan titik, bukan jalur jalan sebenarnya." : "Garis putus-putus menghubungkan titik aktif sesuai urutan, bukan jalur jalan sebenarnya."}
+          {unplaced.length > 0 && ` ${unplaced.length} titik aktif belum memiliki koordinat dan tidak dapat ditampilkan di peta.`}
           {tilesFailed && " Peta dasar gagal dimuat; koordinat tetap bisa diisi manual."}
         </p>
-        <button type="button" onClick={() => setFitTick((n) => n + 1)}>Tampilkan semua titik</button>
+        {!compact && <button type="button" onClick={() => setFitTick((n) => n + 1)}>Tampilkan semua titik</button>}
       </div>
     </div>
   );

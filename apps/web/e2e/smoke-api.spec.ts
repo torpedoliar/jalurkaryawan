@@ -22,7 +22,7 @@ test('login → book daily → cancel against live API', async ({ page }) => {
   await page.getByLabel(/shift/i).selectOption('malam');
   await page.getByLabel(/arah/i).selectOption('PICKUP');
   await page.getByLabel(/rute/i).selectOption('r2');
-  await page.getByLabel(/titik jemput/i).selectOption('r2s1');
+  await page.getByRole('combobox', { name: 'Titik jemput' }).selectOption('r2s1');
   await expect(page.getByText(/sisa kursi:\s*\d+\s*dari\s*50/i)).toBeVisible();
   await page.getByRole('button', { name: /pesan/i }).click();
   await expect(page.getByText(/booking berhasil/i)).toBeVisible();

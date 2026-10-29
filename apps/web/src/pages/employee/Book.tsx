@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { z } from "zod";
 import { Availability, Booking, DailyBookingRequest, Direction, ENDPOINTS, Route, Shift, Stop, addDays } from "@bms/shared";
 import { api } from "../../api";
+import { RouteMap } from "../../RouteMap";
 import { useMe } from "../../auth";
 import { DIRECTION_LABEL, ErrorText, PageHeader, Panel, hhmm, pct, today, useAction, useLoad } from "../../ui";
 
@@ -16,6 +17,9 @@ export function TripFields({ value, onChange }: { value: TripChoice; onChange(v:
     () => (value.routeId ? api.get(ENDPOINTS.routeStops(value.routeId), z.array(Stop)) : Promise.resolve([])),
     [value.routeId],
   );
+  const selectedRoute = routes.data?.find((r) => r.id === value.routeId);
+  const routeStops = stops.data?.filter((s) => s.routeId === value.routeId) ?? [];
+  const activeStops = routeStops.filter((s) => s.active);
   return (
     <>
       <label>Shift
@@ -37,12 +41,28 @@ export function TripFields({ value, onChange }: { value: TripChoice; onChange(v:
         </select>
       </label>
       {value.routeId && (
-        <label>Titik jemput
-          <select value={value.stopId} onChange={(e) => onChange({ ...value, stopId: e.target.value })} required>
-            <option value="">Pilih titik</option>
-            {stops.data?.filter((s) => s.active).map((s) => <option key={s.id} value={s.id}>{s.seq}. {s.name}</option>)}
-          </select>
-        </label>
+        <>
+          <label>Titik jemput
+            <select value={value.stopId} onChange={(e) => onChange({ ...value, stopId: e.target.value })} required>
+              <option value="">Pilih titik</option>
+              {activeStops.map((s) => <option key={s.id} value={s.id}>{s.seq}. {s.name}</option>)}
+            </select>
+          </label>
+          {selectedRoute && stops.data && (
+            activeStops.length > 0 ? (
+              <section className="route-preview" aria-label={`Titik jemput rute ${selectedRoute.code}`}>
+                <h3>Peta titik jemput · {selectedRoute.code}</h3>
+                <RouteMap
+                  stops={activeStops}
+                  color={selectedRoute.color}
+                  readOnly
+                  compact
+                  label={`Peta titik jemput ${selectedRoute.code}`}
+                />
+              </section>
+            ) : <p className="empty-note">Belum ada titik jemput aktif untuk rute ini.</p>
+          )}
+        </>
       )}
       <ErrorText error={shifts.error ?? routes.error ?? stops.error} />
     </>
