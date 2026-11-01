@@ -13,6 +13,7 @@ Jalur Karyawan (internal name: Bus Management System, BMS) schedules and books e
 
 ## Contents
 
+- [Screenshots](#screenshots)
 - [Features](#features)
 - [Roles](#roles)
 - [Architecture](#architecture)
@@ -25,6 +26,20 @@ Jalur Karyawan (internal name: Bus Management System, BMS) schedules and books e
 - [Project layout](#project-layout)
 - [Documentation](#documentation)
 - [License](#license)
+
+## Screenshots
+
+![Admin dashboard: occupancy, rejected bookings, and busiest routes](docs/screenshots/dashboard.png)
+
+*Admin dashboard: occupancy, rejected bookings, and busiest routes*
+
+| | |
+|:---:|:---:|
+| ![Daily trips with occupancy per trip](docs/screenshots/daily-trips.png)<br/>Daily trips with occupancy per trip | ![Routes and stops](docs/screenshots/routes.png)<br/>Routes and stops |
+| ![Employee home: upcoming tickets](docs/screenshots/employee-home.png)<br/>Employee home: upcoming tickets | ![Daily booking](docs/screenshots/employee-booking.png)<br/>Daily booking |
+| ![Sign-in](docs/screenshots/login.png)<br/>Sign-in | |
+
+Screens captured in mock mode (`start.bat -Mode mock`) with demo data.
 
 ## Features
 

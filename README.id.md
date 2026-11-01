@@ -13,6 +13,7 @@ Jalur Karyawan (nama internal: Bus Management System, BMS) mengatur jadwal dan p
 
 ## Daftar isi
 
+- [Tangkapan layar](#tangkapan-layar)
 - [Fitur](#fitur)
 - [Peran pengguna](#peran-pengguna)
 - [Arsitektur](#arsitektur)
@@ -25,6 +26,20 @@ Jalur Karyawan (nama internal: Bus Management System, BMS) mengatur jadwal dan p
 - [Struktur proyek](#struktur-proyek)
 - [Dokumentasi](#dokumentasi)
 - [Lisensi](#lisensi)
+
+## Tangkapan layar
+
+![Dashboard admin: keterisian, booking ditolak, dan rute terpadat](docs/screenshots/dashboard.png)
+
+*Dashboard admin: keterisian, booking ditolak, dan rute terpadat*
+
+| | |
+|:---:|:---:|
+| ![Trip harian dengan keterisian per trip](docs/screenshots/daily-trips.png)<br/>Trip harian dengan keterisian per trip | ![Rute dan titik jemput](docs/screenshots/routes.png)<br/>Rute dan titik jemput |
+| ![Beranda karyawan: tiket mendatang](docs/screenshots/employee-home.png)<br/>Beranda karyawan: tiket mendatang | ![Booking harian](docs/screenshots/employee-booking.png)<br/>Booking harian |
+| ![Halaman login](docs/screenshots/login.png)<br/>Halaman login | |
+
+Tangkapan layar diambil dalam mode mock (`start.bat -Mode mock`) dengan data demo.
 
 ## Fitur
 
